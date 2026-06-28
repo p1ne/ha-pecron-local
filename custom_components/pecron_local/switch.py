@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import CONF_CONTROLS, CONTROLS, DOMAIN, SENSOR_FIELDS
@@ -18,12 +19,18 @@ class PecronSwitchDescription(SwitchEntityDescription):
     key: str
     data_point_id: int
     resource_codes: tuple[str, ...] = ()
+    allow_read_only: bool = False
 
 
 SWITCH_DESCRIPTIONS: list[PecronSwitchDescription] = [
     PecronSwitchDescription(key="ac_switch_hm", name="AC Output", data_point_id=40),
     PecronSwitchDescription(key="dc_switch_hm", name="DC Output", data_point_id=38),
-    PecronSwitchDescription(key="ups_status_hm", name="UPS Mode", data_point_id=27),
+    PecronSwitchDescription(
+        key="ups_status_hm",
+        name="UPS Mode",
+        data_point_id=27,
+        allow_read_only=True,
+    ),
     PecronSwitchDescription(
         key="device_touch_locking_as",
         name="Touch Lock",
@@ -89,6 +96,8 @@ def _has_writable_control(description: PecronSwitchDescription, controls: dict) 
         info = controls.get(code)
         if info and "W" in str(info.get("access", "RW")).upper():
             return True
+        if info and description.allow_read_only:
+            return True
     return False
 
 
@@ -101,6 +110,7 @@ class PecronSwitch(PecronControlEntity, SwitchEntity):
         self._controls = entry.data.get(CONF_CONTROLS) or CONTROLS
         self._control_code, info = _resolve_control(description, self._controls)
         self._data_point_id = int(info.get("id", description.data_point_id))
+        self._writable = "W" in str(info.get("access", "RW")).upper()
         self._field_paths = _field_paths(description, self._control_code)
 
     def _device_value(self) -> bool | None:
@@ -113,10 +123,19 @@ class PecronSwitch(PecronControlEntity, SwitchEntity):
         return self._displayed_value()
 
     async def async_turn_on(self, **kwargs) -> None:
-        await self._async_write(True, self._data_point_id, True, "BOOL")
+        await self._send_write(True)
 
     async def async_turn_off(self, **kwargs) -> None:
-        await self._async_write(False, self._data_point_id, False, "BOOL")
+        await self._send_write(False)
+
+    async def _send_write(self, value: bool) -> None:
+        if not self._writable:
+            # Shown for status only on models whose TSL marks it read-only.
+            await self.coordinator.async_request_refresh()
+            raise HomeAssistantError(
+                f"{self.entity_description.name} is read-only on this model"
+            )
+        await self._async_write(value, self._data_point_id, value, "BOOL")
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:

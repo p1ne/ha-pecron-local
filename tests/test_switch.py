@@ -66,7 +66,26 @@ async def test_eco_mode_uses_f3000_eco_onoff_code_for_state_and_write():
     coordinator.active_transport.write.assert_awaited_once_with(84, True, "BOOL")
 
 
-def test_read_only_tsl_control_is_not_exposed_as_switch():
+def test_read_only_ups_mode_stays_visible():
     desc = _switch_description("ups_status_hm")
 
-    assert _has_writable_control(desc, {"ups_status_hm": {"id": 27, "access": "R"}}) is False
+    assert _has_writable_control(desc, {"ups_status_hm": {"id": 27, "access": "R"}}) is True
+
+
+async def test_read_only_ups_mode_does_not_send_write():
+    controls = {"ups_status_hm": {"id": 27, "type": "BOOL", "access": "R"}}
+    coordinator = _coordinator({"ups_status_hm": True})
+    entity = PecronSwitch(coordinator, _entry(controls), _switch_description("ups_status_hm"))
+
+    assert entity.is_on is True
+
+    await entity.async_turn_off()
+
+    coordinator.active_transport.write.assert_not_awaited()
+    coordinator.async_request_refresh.assert_awaited_once()
+
+
+def test_read_only_non_status_control_is_not_exposed_as_switch():
+    desc = _switch_description("auto_light_flag_as")
+
+    assert _has_writable_control(desc, {"auto_light_flag_as": {"id": 43, "access": "R"}}) is False
