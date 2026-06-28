@@ -14,7 +14,7 @@ import string
 
 import aiohttp
 
-from .const import REGIONS
+from .const import REGIONS, enum_labels_from_specs
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -112,6 +112,37 @@ async def fetch_user_devices(token: str, region_key: str) -> list[dict]:
         if pk and dk:
             devices.append({"product_key": pk, "device_key": dk, "name": name})
     return devices
+
+
+async def fetch_product_tsl(token: str, region_key: str, product_key: str) -> dict:
+    """Fetch product TSL controls, including model-specific enum labels."""
+    region = REGIONS[region_key]
+    async with aiohttp.ClientSession() as session:
+        url = region["base_url"] + f"/v2/binding/enduserapi/productTSL?pk={product_key}"
+        async with session.get(url, headers={"Authorization": token}) as resp:
+            body = await resp.json(content_type=None)
+
+    if body.get("code") != 200:
+        return {}
+
+    controls = {}
+    for prop in body.get("data", {}).get("properties", []):
+        if not isinstance(prop, dict) or "code" not in prop or "id" not in prop:
+            continue
+        dt = prop.get("dataType", {})
+        dtype = dt.get("type", dt) if isinstance(dt, dict) else str(dt)
+        info = {
+            "id": prop["id"],
+            "type": dtype,
+            "desc": prop.get("name", prop["code"]),
+            "access": prop.get("subType", prop.get("accessMode", "R")),
+        }
+        if str(dtype).upper() == "ENUM":
+            enum_labels = enum_labels_from_specs(prop.get("specs"))
+            if enum_labels:
+                info["enum_labels"] = enum_labels
+        controls[prop["code"]] = info
+    return controls
 
 
 async def fetch_auth_key(token: str, region_key: str, product_key: str, device_key: str) -> str:

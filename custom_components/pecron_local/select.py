@@ -12,9 +12,13 @@ from .const import (
     AC_FREQUENCY_OPTIONS,
     AC_VOLTAGE_OPTIONS,
     AUTO_OFF_OPTIONS,
+    CONF_CONTROLS,
+    CONTROLS,
     DOMAIN,
     SCREEN_BRIGHTNESS_OPTIONS,
     STANDBY_TIMEOUT_OPTIONS,
+    enum_labels_for,
+    enum_options,
 )
 from .coordinator import PecronCoordinator
 from .entity import PecronControlEntity, async_remove_unreported, reported
@@ -38,13 +42,29 @@ SELECT_DESCRIPTIONS: list[PecronSelectDescription] = [
 ]
 
 
+def _labels_for_description(description: PecronSelectDescription, controls: dict | None) -> dict:
+    info = (controls or {}).get(description.key, {})
+    return enum_labels_for(description.key, info, description.options)
+
+
+def _option_value_maps(labels: dict) -> tuple[dict[object, str], dict[str, object]]:
+    value_to_option = dict(labels)
+    option_to_value = {option: value for value, option in labels.items()}
+    return value_to_option, option_to_value
+
+
 class PecronSelect(PecronControlEntity, SelectEntity):
     entity_description: PecronSelectDescription
 
     def __init__(self, coordinator: PecronCoordinator, entry: ConfigEntry, description: PecronSelectDescription) -> None:
         super().__init__(coordinator, entry, description.key)
         self.entity_description = description
-        self._attr_options = description.options
+        self._controls = entry.data.get(CONF_CONTROLS) or CONTROLS
+        info = self._controls.get(description.key, {})
+        self._data_point_id = int(info.get("id", description.data_point_id))
+        labels = _labels_for_description(description, self._controls)
+        self._value_to_option, self._option_to_value = _option_value_maps(labels)
+        self._attr_options = enum_options(labels)
 
     def _device_value(self) -> str | None:
         if not self.coordinator.data:
@@ -53,26 +73,30 @@ class PecronSelect(PecronControlEntity, SelectEntity):
         if val is None:
             return None
         try:
-            idx = int(val)
-            return self.entity_description.options[idx]
-        except (IndexError, TypeError, ValueError):
-            return None
+            lookup_value = int(val)
+        except (TypeError, ValueError):
+            lookup_value = val
+        return self._value_to_option.get(lookup_value)
 
     @property
     def current_option(self) -> str | None:
         return self._displayed_value()
 
     async def async_select_option(self, option: str) -> None:
-        idx = self.entity_description.options.index(option)
-        await self._async_write(option, self.entity_description.data_point_id, idx, "ENUM")
+        value = self._option_to_value[option]
+        await self._async_write(option, self._data_point_id, value, "ENUM")
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     coordinator: PecronCoordinator = hass.data[DOMAIN][entry.entry_id]
+    controls = entry.data.get(CONF_CONTROLS) or {}
     entities = [
         PecronSelect(coordinator, entry, desc)
         for desc in SELECT_DESCRIPTIONS
-        if reported(coordinator.data, [(desc.key,)])
+        # With a cloud TSL, the model must define the control; either way the
+        # device must actually report it.
+        if (not controls or desc.key in controls)
+        and reported(coordinator.data, [(desc.key,)])
     ]
     async_remove_unreported(hass, entry, "select", {e.unique_id for e in entities})
     async_add_entities(entities)

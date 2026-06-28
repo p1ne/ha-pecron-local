@@ -20,7 +20,16 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, SENSOR_FIELDS, DEVICE_STATUS_LABELS, CHARGE_STATUS_LABELS
+from .const import (
+    AC_CHARGING_POWER_OPTIONS,
+    CONF_CONTROLS,
+    CONTROLS,
+    DOMAIN,
+    SENSOR_FIELDS,
+    DEVICE_STATUS_LABELS,
+    CHARGE_STATUS_LABELS,
+    enum_labels_for,
+)
 from .coordinator import PecronCoordinator
 from .entity import PecronEntity, async_remove_unreported, reported
 
@@ -83,6 +92,25 @@ class PecronSensor(PecronEntity, SensorEntity):
     def __init__(self, coordinator: PecronCoordinator, entry: ConfigEntry, description: PecronSensorDescription) -> None:
         super().__init__(coordinator, entry, description.key)
         self.entity_description = description
+        self._controls = entry.data.get(CONF_CONTROLS) or CONTROLS
+
+    def _enum_percentage(self, code: str, raw: object, fallback_options: list[str]) -> object:
+        labels = enum_labels_for(code, self._controls.get(code, {}), fallback_options)
+        try:
+            lookup_value = int(raw)
+        except (TypeError, ValueError):
+            lookup_value = raw
+        label = labels.get(lookup_value)
+        if not label:
+            return raw
+        stripped = label.strip()
+        if not stripped.endswith("%"):
+            return raw
+        try:
+            percentage = float(stripped[:-1])
+        except ValueError:
+            return raw
+        return int(percentage) if percentage.is_integer() else percentage
 
     @property
     def native_value(self) -> object:
@@ -93,6 +121,12 @@ class PecronSensor(PecronEntity, SensorEntity):
             return DEVICE_STATUS_LABELS.get(int(raw), str(raw))
         if self.entity_description.key == "charge_status" and raw is not None:
             return CHARGE_STATUS_LABELS.get(int(raw), str(raw))
+        if self.entity_description.key == "ac_charging_power" and raw is not None:
+            return self._enum_percentage(
+                "ac_charging_power_ios",
+                raw,
+                AC_CHARGING_POWER_OPTIONS,
+            )
         return raw
 
 

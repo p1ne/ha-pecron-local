@@ -9,9 +9,16 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResult
 
-from .cloud_auth import CloudAuthError, cloud_login, fetch_auth_key, fetch_user_devices
+from .cloud_auth import (
+    CloudAuthError,
+    cloud_login,
+    fetch_auth_key,
+    fetch_product_tsl,
+    fetch_user_devices,
+)
 from .const import (
     CONF_AUTH_KEY,
+    CONF_CONTROLS,
     CONF_DEVICE_KEY,
     CONF_MAC,
     CONF_POLL_INTERVAL,
@@ -75,6 +82,7 @@ class PecronLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._region_key: str = "na"
         self._token: str = ""
         self._cloud_devices: list[dict] = []
+        self._controls: dict = {}
 
     async def async_step_user(self, user_input: dict | None = None) -> FlowResult:
         if user_input is None:
@@ -180,6 +188,7 @@ class PecronLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 elif len(devices) == 1:
                     self._product_key = devices[0]["product_key"]
                     self._device_key = devices[0]["device_key"]
+                    await self._fetch_controls()
                     auth_key = await fetch_auth_key(
                         token=self._token,
                         region_key=self._region_key,
@@ -228,6 +237,7 @@ class PecronLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._device_key = selected["device_key"]
 
         try:
+            await self._fetch_controls()
             auth_key = await fetch_auth_key(
                 token=self._token,
                 region_key=self._region_key,
@@ -238,6 +248,20 @@ class PecronLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         except CloudAuthError as exc:
             _LOGGER.debug("Failed to fetch auth key: %s", exc)
             return self.async_abort(reason="auth_key_fetch_failed")
+
+    async def _fetch_controls(self) -> None:
+        if not self._token or not self._product_key:
+            self._controls = {}
+            return
+        try:
+            self._controls = await fetch_product_tsl(
+                token=self._token,
+                region_key=self._region_key,
+                product_key=self._product_key,
+            )
+        except Exception as exc:
+            _LOGGER.debug("Failed to fetch product TSL for %s: %s", self._product_key, exc)
+            self._controls = {}
 
     def _create_entry(self, auth_key: str) -> FlowResult:
         preferred = TRANSPORT_TCP if self._host else TRANSPORT_BLE
@@ -252,5 +276,6 @@ class PecronLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_DEVICE_KEY: self._device_key,
                 CONF_PRODUCT_KEY: self._product_key,
                 CONF_REGION: self._region_key,
+                CONF_CONTROLS: self._controls,
             },
         )

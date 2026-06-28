@@ -11,6 +11,7 @@ CONF_PREFERRED_TRANSPORT = "preferred_transport"
 CONF_REGION = "region"
 CONF_DEVICE_KEY = "device_key"
 CONF_PRODUCT_KEY = "product_key"
+CONF_CONTROLS = "controls"
 
 DEFAULT_POLL_INTERVAL = 30
 DEFAULT_PORT = 6607
@@ -185,6 +186,70 @@ CONTROLS: dict[str, dict] = {
     "ac_output_frequency_io": {"id": 33, "type": "ENUM", "desc": "AC output frequency"},
     "noastime_io": {"id": 34, "type": "ENUM", "desc": "Auto-off time"},
 }
+
+
+def _enum_sort_key(item: tuple[object, str]) -> tuple[int, object]:
+    value, _ = item
+    if isinstance(value, int):
+        return (0, value)
+    return (1, str(value))
+
+
+def _normalize_enum_labels(raw: dict | None) -> dict:
+    labels = {}
+    if not isinstance(raw, dict):
+        return labels
+    for key, label in raw.items():
+        try:
+            value = int(key)
+        except (TypeError, ValueError):
+            value = key
+        labels[value] = str(label)
+    return labels
+
+
+def enum_labels_from_specs(specs) -> dict:
+    """Extract enum value labels from a cloud TSL property `specs` list."""
+    labels = {}
+    if not isinstance(specs, list):
+        return labels
+    for spec in specs:
+        if not isinstance(spec, dict):
+            continue
+        if "value" not in spec or "name" not in spec:
+            continue
+        try:
+            value = int(spec["value"])
+        except (TypeError, ValueError):
+            value = spec["value"]
+        labels[value] = str(spec["name"])
+    return labels
+
+
+def enum_labels_for(
+    code: str,
+    info: dict | None = None,
+    fallback_options: list[str] | None = None,
+) -> dict:
+    """Return model-specific enum labels when available, else explicit fallbacks."""
+    if isinstance(info, dict):
+        labels = _normalize_enum_labels(info.get("enum_labels"))
+        if labels:
+            return labels
+        labels = _normalize_enum_labels(info.get("labels"))
+        if labels:
+            return labels
+        labels = enum_labels_from_specs(info.get("specs"))
+        if labels:
+            return labels
+
+    if fallback_options:
+        return dict(enumerate(fallback_options))
+    return {}
+
+
+def enum_options(labels: dict) -> list[str]:
+    return [label for _, label in sorted(labels.items(), key=_enum_sort_key)]
 
 # Cloud API regions
 REGIONS: dict[str, dict] = {

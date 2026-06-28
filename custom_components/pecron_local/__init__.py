@@ -5,9 +5,11 @@ from homeassistant.core import HomeAssistant
 
 from .const import (
     CONF_AUTH_KEY,
+    CONF_CONTROLS,
     CONF_MAC,
     CONF_POLL_INTERVAL,
     CONF_PREFERRED_TRANSPORT,
+    CONTROLS,
     DEFAULT_POLL_INTERVAL,
     DOMAIN,
     PLATFORMS,
@@ -25,9 +27,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     mac = entry.data.get(CONF_MAC)
     poll_interval = entry.data.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL)
     preferred = entry.data.get(CONF_PREFERRED_TRANSPORT, TRANSPORT_TCP)
+    controls = entry.data.get(CONF_CONTROLS) or CONTROLS
 
-    tcp = TcpTransport(host=host, auth_key_b64=auth_key_b64) if host else None
-    ble = BleTransport(mac=mac, auth_key_b64=auth_key_b64) if mac else None
+    tcp = TcpTransport(host=host, auth_key_b64=auth_key_b64, controls=controls) if host else None
+    ble = BleTransport(mac=mac, auth_key_b64=auth_key_b64, controls=controls) if mac else None
 
     if preferred == TRANSPORT_TCP:
         first, second = tcp, ble

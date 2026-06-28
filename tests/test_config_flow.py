@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import AsyncMock, patch
 from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResultType
-from custom_components.pecron_local.const import DOMAIN
+from custom_components.pecron_local.const import CONF_CONTROLS, DOMAIN
 
 
 async def test_flow_shows_device_selector(hass):
@@ -157,3 +157,57 @@ async def test_bluetooth_discovery_flow(hass):
         data=service_info,
     )
     assert result["type"] in (FlowResultType.FORM, FlowResultType.ABORT)
+
+
+async def test_credentials_flow_stores_cloud_tsl_controls(hass):
+    valid_key = base64.b64encode(b"0123456789abcdef").decode()
+    controls = {
+        "ac_charging_power_ios": {
+            "id": 89,
+            "type": "ENUM",
+            "enum_labels": {0: "20%", 4: "100%"},
+        }
+    }
+
+    with patch(
+        "custom_components.pecron_local.config_flow.scan_for_devices",
+        return_value=[],
+    ), patch(
+        "custom_components.pecron_local.config_flow.cloud_login",
+        new_callable=AsyncMock,
+    ) as mock_login, patch(
+        "custom_components.pecron_local.config_flow.fetch_user_devices",
+        new_callable=AsyncMock,
+    ) as mock_devices, patch(
+        "custom_components.pecron_local.config_flow.fetch_product_tsl",
+        new_callable=AsyncMock,
+    ) as mock_tsl, patch(
+        "custom_components.pecron_local.config_flow.fetch_auth_key",
+        new_callable=AsyncMock,
+    ) as mock_auth_key:
+        mock_login.return_value = {"token": "token", "uid": "uid"}
+        mock_devices.return_value = [
+            {"product_key": "p11uAG", "device_key": "24215ED31272", "name": "F3000LFP"}
+        ]
+        mock_tsl.return_value = controls
+        mock_auth_key.return_value = valid_key
+
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"device": "manual_ip"}
+        )
+        result3 = await hass.config_entries.flow.async_configure(
+            result2["flow_id"], {"host": "192.168.1.100"}
+        )
+        result4 = await hass.config_entries.flow.async_configure(
+            result3["flow_id"], {"auth_method": "credentials"}
+        )
+        result5 = await hass.config_entries.flow.async_configure(
+            result4["flow_id"],
+            {"email": "test@example.com", "password": "pass", "region": "na"},
+        )
+
+    assert result5["type"] == FlowResultType.CREATE_ENTRY
+    assert result5["data"][CONF_CONTROLS] == controls

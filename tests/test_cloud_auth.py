@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, patch, MagicMock
 from custom_components.pecron_local.cloud_auth import (
     cloud_login,
     fetch_auth_key,
+    fetch_product_tsl,
     CloudAuthError,
 )
 
@@ -62,3 +63,38 @@ async def test_fetch_auth_key_returns_key():
             device_key="AABBCCDDEEFF",
         )
     assert key == "dGVzdGtleQ=="
+
+
+async def test_fetch_product_tsl_preserves_enum_labels():
+    mock_resp = MagicMock()
+    mock_resp.status = 200
+    mock_resp.json = AsyncMock(return_value={
+        "code": 200,
+        "data": {
+            "properties": [
+                {
+                    "code": "ac_charging_power_ios",
+                    "id": 89,
+                    "dataType": "ENUM",
+                    "name": "AC charging speed",
+                    "subType": "RW",
+                    "specs": [
+                        {"dataType": "ENUM", "name": "20%", "value": "0"},
+                        {"dataType": "ENUM", "name": "100%", "value": "4"},
+                    ],
+                }
+            ]
+        },
+    })
+    mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
+    mock_resp.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("aiohttp.ClientSession.get", return_value=mock_resp):
+        controls = await fetch_product_tsl(
+            token="mytoken",
+            region_key="na",
+            product_key="p11uAG",
+        )
+
+    assert controls["ac_charging_power_ios"]["id"] == 89
+    assert controls["ac_charging_power_ios"]["enum_labels"] == {0: "20%", 4: "100%"}
