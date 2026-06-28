@@ -9,6 +9,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from .const import DEFAULT_FAILURE_GRACE_POLLS
 from .transport.base import PecronTransport, TransportError
 
 _LOGGER = logging.getLogger(__name__)
@@ -28,6 +29,7 @@ class PecronCoordinator(DataUpdateCoordinator[dict]):
         tcp: PecronTransport | None,
         ble: PecronTransport | None,
         poll_interval: int = 30,
+        failure_grace_polls: int = DEFAULT_FAILURE_GRACE_POLLS,
     ) -> None:
         super().__init__(
             hass,
@@ -37,6 +39,8 @@ class PecronCoordinator(DataUpdateCoordinator[dict]):
         )
         self._transports = [t for t in [tcp, ble] if t is not None]
         self.active_transport: PecronTransport | None = None
+        self._failure_grace_polls = max(0, int(failure_grace_polls))
+        self._consecutive_failures = 0
         # Serialises polls and writes: both share one connection to the device.
         self._io_lock = asyncio.Lock()
         self._unsub_write_refresh: CALLBACK_TYPE | None = None
@@ -63,6 +67,7 @@ class PecronCoordinator(DataUpdateCoordinator[dict]):
                             await transport.connect()
                         data = await transport.read()
                         self.active_transport = transport
+                        self._consecutive_failures = 0
                         return data
                     except TransportError as exc:
                         _LOGGER.debug(
@@ -77,7 +82,20 @@ class PecronCoordinator(DataUpdateCoordinator[dict]):
                             errors.append(f"{type(transport).__name__}: {exc}")
 
             self.active_transport = None
-            raise UpdateFailed(f"All transports failed — {'; '.join(errors)}")
+            self._consecutive_failures += 1
+            error_text = "; ".join(errors)
+
+            if self.data is not None and self._consecutive_failures <= self._failure_grace_polls:
+                _LOGGER.warning(
+                    "All transports failed (%s); keeping last good Pecron data "
+                    "(%d/%d grace polls before entities become unavailable)",
+                    error_text,
+                    self._consecutive_failures,
+                    self._failure_grace_polls,
+                )
+                return self.data
+
+            raise UpdateFailed(f"All transports failed — {error_text}")
 
     async def async_write(self, data_point_id: int, value: object, ctrl_type: str) -> None:
         """Write a data point, reconnecting if the device dropped the session.

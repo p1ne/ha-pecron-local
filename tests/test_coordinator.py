@@ -52,6 +52,66 @@ async def test_both_fail_raises_update_failed(coordinator, mock_tcp, mock_ble):
         await coordinator._async_update_data()
 
 
+async def test_failures_return_stale_data_during_grace_period(hass, mock_tcp, mock_ble):
+    coordinator = PecronCoordinator(
+        hass,
+        tcp=mock_tcp,
+        ble=mock_ble,
+        poll_interval=30,
+        failure_grace_polls=2,
+    )
+    coordinator.data = {"battery_percentage": 80}
+    mock_tcp.connected = True
+    mock_tcp.read = AsyncMock(side_effect=TransportError("Read failed: bad block length"))
+    mock_ble.connect = AsyncMock(side_effect=TransportError("ble error"))
+
+    data = await coordinator._async_update_data()
+
+    assert data == {"battery_percentage": 80}
+    assert coordinator.active_transport is None
+
+
+async def test_failures_raise_after_grace_period(hass, mock_tcp, mock_ble):
+    coordinator = PecronCoordinator(
+        hass,
+        tcp=mock_tcp,
+        ble=mock_ble,
+        poll_interval=30,
+        failure_grace_polls=1,
+    )
+    coordinator.data = {"battery_percentage": 80}
+    mock_tcp.connect = AsyncMock(side_effect=TransportError("bad block length"))
+    mock_ble.connect = AsyncMock(side_effect=TransportError("ble error"))
+
+    assert await coordinator._async_update_data() == {"battery_percentage": 80}
+    with pytest.raises(UpdateFailed):
+        await coordinator._async_update_data()
+
+
+async def test_success_resets_failure_grace_counter(hass, mock_tcp, mock_ble):
+    coordinator = PecronCoordinator(
+        hass,
+        tcp=mock_tcp,
+        ble=mock_ble,
+        poll_interval=30,
+        failure_grace_polls=1,
+    )
+    coordinator.data = {"battery_percentage": 80}
+    mock_tcp.connect = AsyncMock(side_effect=TransportError("bad block length"))
+    mock_ble.connect = AsyncMock(side_effect=TransportError("ble error"))
+
+    assert await coordinator._async_update_data() == {"battery_percentage": 80}
+
+    mock_tcp.connect = AsyncMock()
+    mock_tcp.read = AsyncMock(return_value={"battery_percentage": 81})
+    fresh = await coordinator._async_update_data()
+    assert fresh == {"battery_percentage": 81}
+    coordinator.data = fresh
+
+    mock_tcp.connect = AsyncMock(side_effect=TransportError("bad block length"))
+    assert await coordinator._async_update_data() == {"battery_percentage": 81}
+
+
 async def test_active_transport_none_before_first_poll(coordinator):
     assert coordinator.active_transport is None
 
