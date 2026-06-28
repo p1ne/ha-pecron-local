@@ -52,6 +52,16 @@ def _get_field(kv: dict, paths: list[tuple]) -> object | None:
     return None
 
 
+def _device_status_label(raw: object, controls: dict | None = None) -> str:
+    try:
+        raw_int = int(raw)
+    except (TypeError, ValueError):
+        return str(raw)
+
+    labels = enum_labels_for("device_status_hm", (controls or {}).get("device_status_hm", {}))
+    return labels.get(raw_int, DEVICE_STATUS_LABELS.get(raw_int, str(raw)))
+
+
 SENSOR_DESCRIPTIONS: list[PecronSensorDescription] = [
     PecronSensorDescription(key="battery_percent", name="Battery", native_unit_of_measurement=PERCENTAGE, device_class=SensorDeviceClass.BATTERY, state_class=SensorStateClass.MEASUREMENT),
     PecronSensorDescription(key="voltage", name="Voltage", native_unit_of_measurement=UnitOfElectricPotential.VOLT, device_class=SensorDeviceClass.VOLTAGE, state_class=SensorStateClass.MEASUREMENT),
@@ -118,7 +128,7 @@ class PecronSensor(PecronEntity, SensorEntity):
             return None
         raw = _get_field(self.coordinator.data, SENSOR_FIELDS.get(self.entity_description.key, []))
         if self.entity_description.key == "device_status_hm" and raw is not None:
-            return DEVICE_STATUS_LABELS.get(int(raw), str(raw))
+            return _device_status_label(raw, self._controls)
         if self.entity_description.key == "charge_status" and raw is not None:
             return CHARGE_STATUS_LABELS.get(int(raw), str(raw))
         if self.entity_description.key == "ac_charging_power" and raw is not None:

@@ -7,7 +7,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, SENSOR_FIELDS
+from .const import CONF_CONTROLS, CONTROLS, DOMAIN, SENSOR_FIELDS
 from .coordinator import PecronCoordinator
 from .entity import PecronControlEntity, async_remove_unreported, reported
 from .sensor import _get_field
@@ -17,15 +17,26 @@ from .sensor import _get_field
 class PecronSwitchDescription(SwitchEntityDescription):
     key: str
     data_point_id: int
+    resource_codes: tuple[str, ...] = ()
 
 
 SWITCH_DESCRIPTIONS: list[PecronSwitchDescription] = [
     PecronSwitchDescription(key="ac_switch_hm", name="AC Output", data_point_id=40),
     PecronSwitchDescription(key="dc_switch_hm", name="DC Output", data_point_id=38),
     PecronSwitchDescription(key="ups_status_hm", name="UPS Mode", data_point_id=27),
-    PecronSwitchDescription(key="device_touch_locking_as", name="Touch Lock", data_point_id=42),
+    PecronSwitchDescription(
+        key="device_touch_locking_as",
+        name="Touch Lock",
+        data_point_id=42,
+        resource_codes=("device_touch_locking_as", "false_touch_us"),
+    ),
     PecronSwitchDescription(key="auto_light_flag_as", name="Auto Screen Light", data_point_id=43),
-    PecronSwitchDescription(key="eco_quite_mode_as", name="Eco/Quiet Mode", data_point_id=44),
+    PecronSwitchDescription(
+        key="eco_quite_mode_as",
+        name="Eco/Quiet Mode",
+        data_point_id=44,
+        resource_codes=("eco_quite_mode_as", "eco_onoff_us"),
+    ),
 ]
 
 _SWITCH_FIELD_MAP = {
@@ -38,36 +49,85 @@ _SWITCH_FIELD_MAP = {
 }
 
 
+def _truthy(value) -> bool | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "t", "yes", "y", "on", "open", "enabled"}
+    return bool(value)
+
+
+def _resource_codes(description: PecronSwitchDescription) -> tuple[str, ...]:
+    return description.resource_codes or (description.key,)
+
+
+def _resolve_control(description: PecronSwitchDescription, controls: dict) -> tuple[str, dict]:
+    for code in _resource_codes(description):
+        info = controls.get(code)
+        if info is not None and "W" in str(info.get("access", "RW")).upper():
+            return code, info
+    for code in _resource_codes(description):
+        info = controls.get(code)
+        if info is not None:
+            return code, info
+    return description.key, controls.get(description.key, {})
+
+
+def _field_paths(description: PecronSwitchDescription, control_code: str) -> list[tuple]:
+    base_paths = _SWITCH_FIELD_MAP.get(description.key, [(description.key,)])
+    return [(control_code,)] + [path for path in base_paths if path != (control_code,)]
+
+
+def _has_writable_control(description: PecronSwitchDescription, controls: dict) -> bool:
+    if not controls:
+        return True
+    for code in _resource_codes(description):
+        info = controls.get(code)
+        if info and "W" in str(info.get("access", "RW")).upper():
+            return True
+    return False
+
+
 class PecronSwitch(PecronControlEntity, SwitchEntity):
     entity_description: PecronSwitchDescription
 
     def __init__(self, coordinator: PecronCoordinator, entry: ConfigEntry, description: PecronSwitchDescription) -> None:
         super().__init__(coordinator, entry, description.key)
         self.entity_description = description
+        self._controls = entry.data.get(CONF_CONTROLS) or CONTROLS
+        self._control_code, info = _resolve_control(description, self._controls)
+        self._data_point_id = int(info.get("id", description.data_point_id))
+        self._field_paths = _field_paths(description, self._control_code)
 
     def _device_value(self) -> bool | None:
         if not self.coordinator.data:
             return None
-        val = _get_field(self.coordinator.data, _SWITCH_FIELD_MAP.get(self.entity_description.key, [(self.entity_description.key,)]))
-        return bool(val) if val is not None else None
+        return _truthy(_get_field(self.coordinator.data, self._field_paths))
 
     @property
     def is_on(self) -> bool | None:
         return self._displayed_value()
 
     async def async_turn_on(self, **kwargs) -> None:
-        await self._async_write(True, self.entity_description.data_point_id, True, "BOOL")
+        await self._async_write(True, self._data_point_id, True, "BOOL")
 
     async def async_turn_off(self, **kwargs) -> None:
-        await self._async_write(False, self.entity_description.data_point_id, False, "BOOL")
+        await self._async_write(False, self._data_point_id, False, "BOOL")
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     coordinator: PecronCoordinator = hass.data[DOMAIN][entry.entry_id]
+    controls = entry.data.get(CONF_CONTROLS) or {}
+    resolve_from = controls or CONTROLS
     entities = [
         PecronSwitch(coordinator, entry, desc)
         for desc in SWITCH_DESCRIPTIONS
-        if reported(coordinator.data, _SWITCH_FIELD_MAP.get(desc.key, [(desc.key,)]))
+        if _has_writable_control(desc, controls)
+        and reported(coordinator.data, _field_paths(desc, _resolve_control(desc, resolve_from)[0]))
     ]
     async_remove_unreported(hass, entry, "switch", {e.unique_id for e in entities})
     async_add_entities(entities)
