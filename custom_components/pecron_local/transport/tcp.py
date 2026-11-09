@@ -272,11 +272,21 @@ class TcpTransport(PecronTransport):
         async with self._lock:
             try:
                 await self._do_write(data_point_id, value, ctrl_type)
+            except asyncio.CancelledError:
+                self._encrypted = False
+                self._iv = None
+                raise
             except Exception as exc:
                 self._encrypted = False
+                self._iv = None
                 raise TransportError(f"Write failed: {exc}") from exc
 
     async def _do_write(self, data_point_id: int, value: object, ctrl_type: str) -> None:
+        # Same post-handshake pause as reads: some firmware drops a command
+        # that arrives right after login.
+        if not self._first_read_done:
+            await asyncio.sleep(0.5)
+            self._first_read_done = True
         ctrl_type = ctrl_type.upper()
         if ctrl_type == "BOOL":
             raw_payload = struct.pack(">H", (data_point_id << 3) | (1 if value else 0))

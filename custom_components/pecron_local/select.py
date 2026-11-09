@@ -17,9 +17,8 @@ from .const import (
     STANDBY_TIMEOUT_OPTIONS,
 )
 from .coordinator import PecronCoordinator
-from .entity import PecronEntity
+from .entity import PecronControlEntity
 from .sensor import _get_field
-from .transport.base import TransportError
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -39,7 +38,7 @@ SELECT_DESCRIPTIONS: list[PecronSelectDescription] = [
 ]
 
 
-class PecronSelect(PecronEntity, SelectEntity):
+class PecronSelect(PecronControlEntity, SelectEntity):
     entity_description: PecronSelectDescription
 
     def __init__(self, coordinator: PecronCoordinator, entry: ConfigEntry, description: PecronSelectDescription) -> None:
@@ -47,8 +46,7 @@ class PecronSelect(PecronEntity, SelectEntity):
         self.entity_description = description
         self._attr_options = description.options
 
-    @property
-    def current_option(self) -> str | None:
+    def _device_value(self) -> str | None:
         if not self.coordinator.data:
             return None
         val = _get_field(self.coordinator.data, [(self.entity_description.key,)])
@@ -60,19 +58,13 @@ class PecronSelect(PecronEntity, SelectEntity):
         except (IndexError, TypeError, ValueError):
             return None
 
+    @property
+    def current_option(self) -> str | None:
+        return self._displayed_value()
+
     async def async_select_option(self, option: str) -> None:
-        try:
-            idx = self.entity_description.options.index(option)
-        except ValueError:
-            return
-        transport = self.coordinator.active_transport
-        if transport is None:
-            return
-        try:
-            await transport.write(self.entity_description.data_point_id, idx, "ENUM")
-        except TransportError:
-            pass
-        await self.coordinator.async_request_refresh()
+        idx = self.entity_description.options.index(option)
+        await self._async_write(option, self.entity_description.data_point_id, idx, "ENUM")
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:

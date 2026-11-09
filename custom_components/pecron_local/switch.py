@@ -9,9 +9,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN, SENSOR_FIELDS
 from .coordinator import PecronCoordinator
-from .entity import PecronEntity
+from .entity import PecronControlEntity
 from .sensor import _get_field
-from .transport.base import TransportError
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -39,35 +38,28 @@ _SWITCH_FIELD_MAP = {
 }
 
 
-class PecronSwitch(PecronEntity, SwitchEntity):
+class PecronSwitch(PecronControlEntity, SwitchEntity):
     entity_description: PecronSwitchDescription
 
     def __init__(self, coordinator: PecronCoordinator, entry: ConfigEntry, description: PecronSwitchDescription) -> None:
         super().__init__(coordinator, entry, description.key)
         self.entity_description = description
 
-    @property
-    def is_on(self) -> bool | None:
+    def _device_value(self) -> bool | None:
         if not self.coordinator.data:
             return None
         val = _get_field(self.coordinator.data, _SWITCH_FIELD_MAP.get(self.entity_description.key, [(self.entity_description.key,)]))
         return bool(val) if val is not None else None
 
+    @property
+    def is_on(self) -> bool | None:
+        return self._displayed_value()
+
     async def async_turn_on(self, **kwargs) -> None:
-        await self._send_write(True)
+        await self._async_write(True, self.entity_description.data_point_id, True, "BOOL")
 
     async def async_turn_off(self, **kwargs) -> None:
-        await self._send_write(False)
-
-    async def _send_write(self, value: bool) -> None:
-        transport = self.coordinator.active_transport
-        if transport is None:
-            return
-        try:
-            await transport.write(self.entity_description.data_point_id, value, "BOOL")
-        except TransportError:
-            pass
-        await self.coordinator.async_request_refresh()
+        await self._async_write(False, self.entity_description.data_point_id, False, "BOOL")
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
