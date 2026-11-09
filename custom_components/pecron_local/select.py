@@ -15,7 +15,9 @@ from .const import (
     CONF_CONTROLS,
     CONTROLS,
     DOMAIN,
+    KEY_BRIGHTNESS_OPTIONS,
     SCREEN_BRIGHTNESS_OPTIONS,
+    SCREEN_ENERGY_DISPLAY_OPTIONS,
     STANDBY_TIMEOUT_OPTIONS,
     enum_labels_for,
     enum_options,
@@ -39,6 +41,8 @@ SELECT_DESCRIPTIONS: list[PecronSelectDescription] = [
     PecronSelectDescription(key="ac_output_voltage_io", name="AC Output Voltage", data_point_id=32, options=AC_VOLTAGE_OPTIONS),
     PecronSelectDescription(key="ac_output_frequency_io", name="AC Output Frequency", data_point_id=33, options=AC_FREQUENCY_OPTIONS),
     PecronSelectDescription(key="noastime_io", name="Auto-Off Time", data_point_id=34, options=AUTO_OFF_OPTIONS),
+    PecronSelectDescription(key="key_light_us", name="Key Brightness", data_point_id=88, options=KEY_BRIGHTNESS_OPTIONS),
+    PecronSelectDescription(key="screen_power_statistics_mode_us", name="Screen Energy Display", data_point_id=85, options=SCREEN_ENERGY_DISPLAY_OPTIONS),
 ]
 
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 DOMAIN = "pecron_local"
 
-PLATFORMS = ["sensor", "switch", "select"]
+PLATFORMS = ["sensor", "binary_sensor", "switch", "select"]
 
 CONF_AUTH_KEY = "auth_key"
 CONF_MAC = "mac"
@@ -145,7 +145,30 @@ SENSOR_FIELDS: dict[str, list[tuple]] = {
         ("host_packet_data_jdb", "host_packet_ups_status"),
     ],
     "device_status_hm": [("device_status_hm",)],
+    # Energy counters (cloud TSL ids 70-77 on e.g. p11wPr). "Session" values
+    # are "this time" in the Pecron app.
+    "pv_energy_session": [("solar_panel_power_generation",)],
+    "pv_energy_total": [("total_energy",)],
+    "ac_charge_energy_session": [("ac_charge_energy",)],
+    "ac_charge_energy_total": [("total_ac_charge_energy",)],
+    "dc_output_energy_session": [("dc_output_energy",)],
+    "dc_output_energy_total": [("total_dc_output_energy",)],
+    "ac_output_energy_session": [("ac_output_energy",)],
+    "ac_output_energy_total": [("total_ac_output_energy",)],
+    "power_pack_attached": [("add_bat_status_hm",)],
+    # Derived from power flow; gated on the device reporting input power.
+    "activity": [("total_input_power",)],
 }
+
+# Remaining-time value the device sends when nothing is drawing power.
+REMAIN_TIME_NO_LOAD = 6000
+
+KEY_BRIGHTNESS_OPTIONS: list[str] = ["Off", "10%", "50%", "100%"]
+
+SCREEN_ENERGY_DISPLAY_OPTIONS: list[str] = [
+    "PV Input Energy", "Mains Input Energy", "DC Output Energy",
+    "AC Output Energy", "Battery Output Energy",
+]
 
 # Enum decode tables
 DEVICE_STATUS_LABELS: dict[int, str] = {
@@ -186,6 +209,9 @@ CONTROLS: dict[str, dict] = {
     "ac_output_voltage_io": {"id": 32, "type": "ENUM", "desc": "AC output voltage"},
     "ac_output_frequency_io": {"id": 33, "type": "ENUM", "desc": "AC output frequency"},
     "noastime_io": {"id": 34, "type": "ENUM", "desc": "Auto-off time"},
+    "beep_voice_us": {"id": 87, "type": "BOOL", "desc": "Buzzer"},
+    "key_light_us": {"id": 88, "type": "ENUM", "desc": "Key brightness"},
+    "screen_power_statistics_mode_us": {"id": 85, "type": "ENUM", "desc": "Screen energy display"},
 }
 
 

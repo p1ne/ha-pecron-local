@@ -38,6 +38,7 @@ SWITCH_DESCRIPTIONS: list[PecronSwitchDescription] = [
         resource_codes=("device_touch_locking_as", "false_touch_us"),
     ),
     PecronSwitchDescription(key="auto_light_flag_as", name="Auto Screen Light", data_point_id=43),
+    PecronSwitchDescription(key="beep_voice_us", name="Buzzer", data_point_id=87),
     PecronSwitchDescription(
         key="eco_quite_mode_as",
         name="Eco/Quiet Mode",
@@ -53,6 +54,7 @@ _SWITCH_FIELD_MAP = {
     "device_touch_locking_as": [("device_touch_locking_as",)],
     "auto_light_flag_as": [("auto_light_flag_as",)],
     "eco_quite_mode_as": [("eco_quite_mode_as",)],
+    "beep_voice_us": [("beep_voice_us",)],
 }
 
 

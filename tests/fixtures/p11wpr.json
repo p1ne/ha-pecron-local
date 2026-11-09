@@ -1,0 +1,431 @@
+{
+ "product_key": "p11wPr",
+ "controls": {
+  "FAULT_ALARM_ENUM": {
+   "id": 67,
+   "type": "ENUM",
+   "desc": "Fault Alarm Enumeration",
+   "access": "RW",
+   "enum_labels": {
+    "0": "Battery Pack Low Temperature",
+    "1": "Battery Pack Overtemperature",
+    "2": "Battery Pack Overvoltage",
+    "3": "Battery Pack Undervoltage",
+    "4": "Battery Pack Short Circuit",
+    "5": "Battery Pack Charge Overcurrent",
+    "6": "Battery Pack Discharge Overcurrent",
+    "7": "Charging Board Input Overvoltage",
+    "8": "Charging Board Input Overcurrent",
+    "9": "Charging Board Output Overvoltage",
+    "10": "Charging Board Output Overcurrent",
+    "11": "Charging Board Output Short Circuit",
+    "12": "Charging Board Input Undervoltage",
+    "13": "Charging Board Overtemperature",
+    "14": "DC Output Short Circuit",
+    "15": "DC Output Overvoltage",
+    "16": "DC Output Overcurrent",
+    "17": "DC Output Overtemperature",
+    "18": "Mains Voltage Abnormal",
+    "19": "Mains Frequency Abnormal",
+    "20": "Mains Input Overload",
+    "21": "Inverter Output Overload",
+    "22": "Inverter Output Short Circuit",
+    "23": "Inverter Overtemperature",
+    "24": "Fan Failure",
+    "25": "5521 Charge Overtemperature",
+    "26": "5521 Charge Output Overvoltage",
+    "27": "5521 Charge Output Overcurrent",
+    "28": "5521 Charge Input Overvoltage",
+    "29": "5521 Charge Input Overcurrent",
+    "30": "Power Pack 0 Low Temperature",
+    "31": "Power Pack 0 Overtemperature",
+    "32": "Power Pack 0 Overvoltage",
+    "33": "Power Pack 0 Undervoltage",
+    "34": "Power Pack 0 Short Circuit",
+    "35": "Power Pack 0 Charge Overcurrent",
+    "36": "Power Pack 0 Discharge Overcurrent",
+    "37": "Power Pack 1 Low Temperature",
+    "38": "Power Pack 1 Overtemperature",
+    "39": "Power Pack 1 Overvoltage",
+    "40": "Power Pack 1 Undervoltage",
+    "41": "Power Pack 1 Short Circuit",
+    "42": "Power Pack 1 Charge Overcurrent",
+    "43": "Power Pack 1 Discharge Overcurrent",
+    "44": "Power Pack 2 Low Temperature",
+    "45": "Power Pack 2 Overtemperature",
+    "46": "Power Pack 2 Overvoltage",
+    "47": "Power Pack 2 Undervoltage",
+    "48": "Power Pack 2 Short Circuit",
+    "49": "Power Pack 2 Charge Overcurrent",
+    "50": "Power Pack 2 Discharge Overcurrent",
+    "51": "Power Pack 3 Low Temperature",
+    "52": "Power Pack 3 Overtemperature",
+    "53": "Power Pack 3 Overvoltage",
+    "54": "Power Pack 3 Undervoltage",
+    "55": "Power Pack 3 Short Circuit",
+    "56": "Power Pack 3 Charge Overcurrent",
+    "57": "Power Pack 3 Discharge Overcurrent",
+    "58": "Power Pack 4 Low Temperature",
+    "59": "Power Pack 4 Overtemperature",
+    "60": "Power Pack 4 Overvoltage",
+    "61": "Power Pack 4 Undervoltage",
+    "62": "Power Pack 4 Short Circuit",
+    "63": "Power Pack 4 Charge Overcurrent",
+    "64": "Power Pack 4 Discharge Overcurrent",
+    "65": "Power Pack 5 Low Temperature",
+    "66": "Power Pack 5 Overtemperature",
+    "67": "Power Pack 5 Overvoltage",
+    "68": "Power Pack 5 Undervoltage",
+    "69": "Power Pack 5 Short Circuit",
+    "70": "Power Pack 5 Charge Overcurrent",
+    "71": "Power Pack 5 Discharge Overcurrent"
+   }
+  },
+  "battery_percentage": {
+   "id": 1,
+   "type": "INT",
+   "desc": "Battery Charge",
+   "access": "R"
+  },
+  "remain_time": {
+   "id": 2,
+   "type": "INT",
+   "desc": "Remaining Usable Time",
+   "access": "R"
+  },
+  "remain_charging_time": {
+   "id": 3,
+   "type": "INT",
+   "desc": "Remaining Charging Time",
+   "access": "R"
+  },
+  "total_input_power": {
+   "id": 4,
+   "type": "INT",
+   "desc": "Total Input",
+   "access": "R"
+  },
+  "total_output_power": {
+   "id": 5,
+   "type": "INT",
+   "desc": "Total Output",
+   "access": "R"
+  },
+  "ups_status_hm": {
+   "id": 27,
+   "type": "BOOL",
+   "desc": "UPS Status",
+   "access": "R"
+  },
+  "add_bat_status_hm": {
+   "id": 39,
+   "type": "BOOL",
+   "desc": "Power Pack Status",
+   "access": "R"
+  },
+  "auto_light_flag_as": {
+   "id": 43,
+   "type": "BOOL",
+   "desc": "Automatically dim when idle",
+   "access": "RW"
+  },
+  "device_manual": {
+   "id": 52,
+   "type": "TEXT",
+   "desc": "Device User Manual",
+   "access": "R"
+  },
+  "device_status_hm": {
+   "id": 37,
+   "type": "ENUM",
+   "desc": "Device Status",
+   "access": "R",
+   "enum_labels": {
+    "0": "Shutdown",
+    "1": "Charging Status",
+    "2": "DC Discharge Status",
+    "3": "AC Discharge Status",
+    "4": "Standby Status",
+    "5": "Protection Status"
+   }
+  },
+  "dc_data_output_hm": {
+   "id": 30,
+   "type": "STRUCT",
+   "desc": "DC",
+   "access": "R"
+  },
+  "ac_data_output_hm": {
+   "id": 31,
+   "type": "STRUCT",
+   "desc": "AC",
+   "access": "R"
+  },
+  "host_packet_data_jdb": {
+   "id": 35,
+   "type": "STRUCT",
+   "desc": "Host Power Pack Details",
+   "access": "R"
+  },
+  "charging_pack_data_jdb": {
+   "id": 36,
+   "type": "ARRAY",
+   "desc": "Power Pack Information",
+   "access": "R"
+  },
+  "dc_data_input_hm": {
+   "id": 28,
+   "type": "STRUCT",
+   "desc": "DC/PV",
+   "access": "R"
+  },
+  "ac_data_input_hm": {
+   "id": 29,
+   "type": "STRUCT",
+   "desc": "AC ",
+   "access": "R"
+  },
+  "dc_switch_hm": {
+   "id": 38,
+   "type": "BOOL",
+   "desc": "DC OUTPUT",
+   "access": "RW"
+  },
+  "ac_switch_hm": {
+   "id": 40,
+   "type": "BOOL",
+   "desc": "AC OUTPUT",
+   "access": "RW"
+  },
+  "high_frequency_reporting": {
+   "id": 100,
+   "type": "ENUM",
+   "desc": "High-Frequency Reporting",
+   "access": "RW",
+   "enum_labels": {
+    "0": "Non-High-Frequency Reporting",
+    "1": "Local Network High-Frequency Reporting",
+    "2": "WIFI High-Frequency Reporting",
+    "3": "Local Network + WIFI High-Frequency Reporting"
+   }
+  },
+  "device_standy_times_as": {
+   "id": 90,
+   "type": "ENUM",
+   "desc": "Device timeout",
+   "access": "RW",
+   "enum_labels": {
+    "0": "30Minute",
+    "1": "2Hour",
+    "2": "6Hour",
+    "3": "24Hour",
+    "4": "7Day"
+   }
+  },
+  "ac_charging_power_ios": {
+   "id": 89,
+   "type": "ENUM",
+   "desc": "AC charging  speed",
+   "access": "RW",
+   "enum_labels": {
+    "0": "20%",
+    "1": "40%",
+    "2": "60%",
+    "3": "80%",
+    "4": "100%"
+   }
+  },
+  "key_light_us": {
+   "id": 88,
+   "type": "ENUM",
+   "desc": "Key brightness",
+   "access": "RW",
+   "enum_labels": {
+    "0": "OFF",
+    "1": "10%",
+    "2": "50%",
+    "3": "100%"
+   }
+  },
+  "beep_voice_us": {
+   "id": 87,
+   "type": "BOOL",
+   "desc": "Buzzer volume",
+   "access": "RW"
+  },
+  "false_touch_us": {
+   "id": 86,
+   "type": "BOOL",
+   "desc": "Anti-misoperation mode",
+   "access": "RW"
+  },
+  "screen_power_statistics_mode_us": {
+   "id": 85,
+   "type": "ENUM",
+   "desc": "Power statistics display",
+   "access": "RW",
+   "enum_labels": {
+    "0": "PV Input Energy",
+    "1": "Mains Input Energy",
+    "2": "DC Output Energy",
+    "3": "AC Output Energy",
+    "4": "Battery Output Energy"
+   }
+  },
+  "eco_onoff_us": {
+   "id": 84,
+   "type": "BOOL",
+   "desc": "ECO",
+   "access": "RW"
+  },
+  "solar_panel_power_generation": {
+   "id": 70,
+   "type": "FLOAT",
+   "desc": "PV generation this time",
+   "access": "R"
+  },
+  "total_energy": {
+   "id": 71,
+   "type": "FLOAT",
+   "desc": "PV cumulative generation",
+   "access": "R"
+  },
+  "ac_charge_energy": {
+   "id": 72,
+   "type": "FLOAT",
+   "desc": "AC charge this time",
+   "access": "R"
+  },
+  "total_ac_charge_energy": {
+   "id": 73,
+   "type": "FLOAT",
+   "desc": "AC cumulative charge",
+   "access": "R"
+  },
+  "dc_output_energy": {
+   "id": 74,
+   "type": "FLOAT",
+   "desc": "DC output this time",
+   "access": "R"
+  },
+  "total_dc_output_energy": {
+   "id": 75,
+   "type": "FLOAT",
+   "desc": "DC cumulative output",
+   "access": "R"
+  },
+  "ac_output_energy": {
+   "id": 76,
+   "type": "FLOAT",
+   "desc": "AC output this time",
+   "access": "R"
+  },
+  "total_ac_output_energy": {
+   "id": 77,
+   "type": "FLOAT",
+   "desc": "AC cumulative output",
+   "access": "R"
+  }
+ },
+ "coordinator_data": {
+  "battery_percentage": 100,
+  "remain_time": 6000,
+  "remain_charging_time": 0,
+  "total_input_power": 0,
+  "total_output_power": 0,
+  "ups_status_hm": false,
+  "add_bat_status_hm": false,
+  "auto_light_flag_as": true,
+  "device_status_hm": 0,
+  "dc_data_output_hm": {
+   "dc_output_power": 0
+  },
+  "ac_data_output_hm": {
+   "ac_output_hz": 0,
+   "ac_output_voltage": 0,
+   "ac_output_pf": 0,
+   "ac_output_power": 0
+  },
+  "host_packet_data_jdb": {
+   "host_packet_electric_percentage": 100,
+   "host_packet_voltage": 55.4500007629395,
+   "host_packet_current": 0,
+   "host_packet_temp": 28,
+   "host_packet_status": 0
+  },
+  "charging_pack_data_jdb": [
+   {
+    "charging_pack_num": 0,
+    "charging_pack_battery": 4,
+    "charging_pack_voltage": 0,
+    "charging_pack_current": 0,
+    "charging_pack_temp": 0,
+    "charging_pack_status": 0
+   },
+   {
+    "charging_pack_num": 1,
+    "charging_pack_battery": 4,
+    "charging_pack_voltage": 0,
+    "charging_pack_current": 0,
+    "charging_pack_temp": 0,
+    "charging_pack_status": 0
+   },
+   {
+    "charging_pack_num": 2,
+    "charging_pack_battery": 4,
+    "charging_pack_voltage": 0,
+    "charging_pack_current": 0,
+    "charging_pack_temp": 0,
+    "charging_pack_status": 0
+   },
+   {
+    "charging_pack_num": 3,
+    "charging_pack_battery": 4,
+    "charging_pack_voltage": 0,
+    "charging_pack_current": 0,
+    "charging_pack_temp": 0,
+    "charging_pack_status": 0
+   },
+   {
+    "charging_pack_num": 4,
+    "charging_pack_battery": 4,
+    "charging_pack_voltage": 0,
+    "charging_pack_current": 0,
+    "charging_pack_temp": 0,
+    "charging_pack_status": 0
+   },
+   {
+    "charging_pack_num": 5,
+    "charging_pack_battery": 4,
+    "charging_pack_voltage": 0,
+    "charging_pack_current": 0,
+    "charging_pack_temp": 0,
+    "charging_pack_status": 0
+   }
+  ],
+  "dc_data_input_hm": {
+   "dc_input_power": 0
+  },
+  "ac_data_input_hm": {
+   "ac_power": 0
+  },
+  "dc_switch_hm": false,
+  "ac_switch_hm": false,
+  "high_frequency_reporting": 0,
+  "device_standy_times_as": 0,
+  "ac_charging_power_ios": 4,
+  "key_light_us": 3,
+  "beep_voice_us": true,
+  "false_touch_us": true,
+  "screen_power_statistics_mode_us": 0,
+  "eco_onoff_us": false,
+  "solar_panel_power_generation": 0,
+  "total_energy": 0,
+  "ac_charge_energy": 0,
+  "total_ac_charge_energy": 1.73000001907349,
+  "dc_output_energy": 0,
+  "total_dc_output_energy": 0,
+  "ac_output_energy": 0,
+  "total_ac_output_energy": 0.070000000298023
+ }
+}

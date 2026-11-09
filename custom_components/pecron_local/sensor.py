@@ -13,6 +13,7 @@ from homeassistant.const import (
     PERCENTAGE,
     UnitOfElectricCurrent,
     UnitOfElectricPotential,
+    UnitOfEnergy,
     UnitOfPower,
     UnitOfTemperature,
     UnitOfTime,
@@ -28,6 +29,7 @@ from .const import (
     SENSOR_FIELDS,
     DEVICE_STATUS_LABELS,
     CHARGE_STATUS_LABELS,
+    REMAIN_TIME_NO_LOAD,
     enum_labels_for,
 )
 from .coordinator import PecronCoordinator
@@ -52,6 +54,13 @@ def _get_field(kv: dict, paths: list[tuple]) -> object | None:
     return None
 
 
+def _power(kv: dict, key: str) -> float:
+    try:
+        return float(_get_field(kv, SENSOR_FIELDS.get(key, [])) or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _device_status_label(raw: object, controls: dict | None = None) -> str:
     try:
         raw_int = int(raw)
@@ -60,6 +69,26 @@ def _device_status_label(raw: object, controls: dict | None = None) -> str:
 
     labels = enum_labels_for("device_status_hm", (controls or {}).get("device_status_hm", {}))
     return labels.get(raw_int, DEVICE_STATUS_LABELS.get(raw_int, str(raw)))
+
+
+ACTIVITY_OPTIONS = ["Charging", "Discharging", "Idle"]
+
+
+def _activity(kv: dict) -> str:
+    """What the unit is doing, from power flow.
+
+    Device Status reports the firmware's own value, which is 0 ("Shutdown")
+    whenever nothing is charging or discharging even though the unit is on.
+    """
+    if _power(kv, "total_input_power") > 0:
+        return "Charging"
+    if (
+        _power(kv, "total_output_power") > 0
+        or _power(kv, "ac_output_power") > 0
+        or _power(kv, "dc_output_power") > 0
+    ):
+        return "Discharging"
+    return "Idle"
 
 
 SENSOR_DESCRIPTIONS: list[PecronSensorDescription] = [
@@ -91,8 +120,17 @@ SENSOR_DESCRIPTIONS: list[PecronSensorDescription] = [
     PecronSensorDescription(key="remain_time", name="Time to Empty", native_unit_of_measurement=UnitOfTime.MINUTES, device_class=SensorDeviceClass.DURATION, state_class=SensorStateClass.MEASUREMENT),
     PecronSensorDescription(key="remain_charging_time", name="Time to Full", native_unit_of_measurement=UnitOfTime.MINUTES, device_class=SensorDeviceClass.DURATION, state_class=SensorStateClass.MEASUREMENT),
     PecronSensorDescription(key="device_status_hm", name="Device Status", native_unit_of_measurement=None),
+    PecronSensorDescription(key="activity", name="Activity", device_class=SensorDeviceClass.ENUM, options=ACTIVITY_OPTIONS),
     PecronSensorDescription(key="charge_status", name="Charge Status", native_unit_of_measurement=None),
     PecronSensorDescription(key="ac_charging_power", name="AC Charging Power", native_unit_of_measurement=PERCENTAGE, state_class=SensorStateClass.MEASUREMENT),
+    PecronSensorDescription(key="pv_energy_session", name="PV Energy (Session)", native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR, device_class=SensorDeviceClass.ENERGY, state_class=SensorStateClass.TOTAL_INCREASING, suggested_display_precision=2),
+    PecronSensorDescription(key="pv_energy_total", name="PV Energy Total", native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR, device_class=SensorDeviceClass.ENERGY, state_class=SensorStateClass.TOTAL_INCREASING, suggested_display_precision=2),
+    PecronSensorDescription(key="ac_charge_energy_session", name="AC Charge Energy (Session)", native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR, device_class=SensorDeviceClass.ENERGY, state_class=SensorStateClass.TOTAL_INCREASING, suggested_display_precision=2),
+    PecronSensorDescription(key="ac_charge_energy_total", name="AC Charge Energy Total", native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR, device_class=SensorDeviceClass.ENERGY, state_class=SensorStateClass.TOTAL_INCREASING, suggested_display_precision=2),
+    PecronSensorDescription(key="dc_output_energy_session", name="DC Output Energy (Session)", native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR, device_class=SensorDeviceClass.ENERGY, state_class=SensorStateClass.TOTAL_INCREASING, suggested_display_precision=2),
+    PecronSensorDescription(key="dc_output_energy_total", name="DC Output Energy Total", native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR, device_class=SensorDeviceClass.ENERGY, state_class=SensorStateClass.TOTAL_INCREASING, suggested_display_precision=2),
+    PecronSensorDescription(key="ac_output_energy_session", name="AC Output Energy (Session)", native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR, device_class=SensorDeviceClass.ENERGY, state_class=SensorStateClass.TOTAL_INCREASING, suggested_display_precision=2),
+    PecronSensorDescription(key="ac_output_energy_total", name="AC Output Energy Total", native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR, device_class=SensorDeviceClass.ENERGY, state_class=SensorStateClass.TOTAL_INCREASING, suggested_display_precision=2),
 ]
 
 
@@ -127,8 +165,19 @@ class PecronSensor(PecronEntity, SensorEntity):
         if not self.coordinator.data:
             return None
         raw = _get_field(self.coordinator.data, SENSOR_FIELDS.get(self.entity_description.key, []))
-        if self.entity_description.key == "device_status_hm" and raw is not None:
+        key = self.entity_description.key
+        if key == "device_status_hm" and raw is not None:
             return _device_status_label(raw, self._controls)
+        if key == "activity":
+            return _activity(self.coordinator.data)
+        if key == "remain_time" and raw is not None:
+            # No load: the device sends a placeholder, not a real estimate.
+            if raw >= REMAIN_TIME_NO_LOAD or _power(self.coordinator.data, "total_output_power") <= 0:
+                return None
+            return raw
+        if self.entity_description.device_class == SensorDeviceClass.ENERGY and raw is not None:
+            # Values arrive as float32 (1.73000001907349); trim the noise.
+            return round(float(raw), 3)
         if self.entity_description.key == "charge_status" and raw is not None:
             return CHARGE_STATUS_LABELS.get(int(raw), str(raw))
         if self.entity_description.key == "ac_charging_power" and raw is not None:
