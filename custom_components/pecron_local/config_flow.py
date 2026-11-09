@@ -263,6 +263,87 @@ class PecronLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             _LOGGER.debug("Failed to fetch product TSL for %s: %s", self._product_key, exc)
             self._controls = {}
 
+    # ------------------------------------------------------------------
+    # Reconfigure: download the model's TSL (field ids, enum labels) for an
+    # existing entry, e.g. one created before TSL support or with a manual
+    # auth key. Host, auth key and entities are kept.
+    # ------------------------------------------------------------------
+
+    async def async_step_reconfigure(self, user_input: dict | None = None) -> FlowResult:
+        entry = self._get_reconfigure_entry()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            self._region_key = user_input["region"]
+            try:
+                token_data = await cloud_login(
+                    user_input["email"], user_input["password"], self._region_key
+                )
+                self._token = token_data["token"]
+                self._product_key = entry.data.get(CONF_PRODUCT_KEY) or ""
+                self._device_key = entry.data.get(CONF_DEVICE_KEY) or ""
+                if not self._product_key:
+                    devices = await fetch_user_devices(self._token, self._region_key)
+                    if self._device_key:
+                        devices = [d for d in devices if d["device_key"] == self._device_key] or devices
+                    if not devices:
+                        errors["base"] = "no_devices_found"
+                    elif len(devices) == 1:
+                        self._product_key = devices[0]["product_key"]
+                        self._device_key = devices[0]["device_key"]
+                    else:
+                        self._cloud_devices = devices
+                        return await self.async_step_reconfigure_pick_device()
+                if not errors:
+                    return await self._async_finish_reconfigure()
+            except CloudAuthError as exc:
+                _LOGGER.debug("Cloud auth error during reconfigure: %s", exc)
+                errors["base"] = "login_failed"
+            except Exception as exc:
+                _LOGGER.exception("Unexpected error during reconfigure: %s", exc)
+                errors["base"] = "cannot_connect"
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=vol.Schema({
+                vol.Required("email"): str,
+                vol.Required("password"): str,
+                vol.Required("region", default=entry.data.get(CONF_REGION) or "na"): vol.In({
+                    k: v["name"] for k, v in REGIONS.items()
+                }),
+            }),
+            errors=errors,
+            description_placeholders={"title": entry.title},
+        )
+
+    async def async_step_reconfigure_pick_device(self, user_input: dict | None = None) -> FlowResult:
+        if user_input is None:
+            options = {
+                d["device_key"]: f"{d['name']} ({d['device_key']})"
+                for d in self._cloud_devices
+            }
+            return self.async_show_form(
+                step_id="reconfigure_pick_device",
+                data_schema=vol.Schema({vol.Required("device_key"): vol.In(options)}),
+            )
+        selected = next(d for d in self._cloud_devices if d["device_key"] == user_input["device_key"])
+        self._product_key = selected["product_key"]
+        self._device_key = selected["device_key"]
+        return await self._async_finish_reconfigure()
+
+    async def _async_finish_reconfigure(self) -> FlowResult:
+        await self._fetch_controls()
+        if not self._controls:
+            return self.async_abort(reason="tsl_fetch_failed")
+        return self.async_update_reload_and_abort(
+            self._get_reconfigure_entry(),
+            data_updates={
+                CONF_CONTROLS: self._controls,
+                CONF_PRODUCT_KEY: self._product_key,
+                CONF_DEVICE_KEY: self._device_key,
+                CONF_REGION: self._region_key,
+            },
+        )
+
     def _create_entry(self, auth_key: str) -> FlowResult:
         preferred = TRANSPORT_TCP if self._host else TRANSPORT_BLE
         return self.async_create_entry(

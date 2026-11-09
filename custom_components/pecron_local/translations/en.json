@@ -1,0 +1,83 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Pecron Local — Add Device",
+        "description": "Select a discovered device or add one manually.",
+        "data": {
+          "device": "Device"
+        }
+      },
+      "manual_host": {
+        "title": "Enter IP Address",
+        "data": {
+          "host": "Device IP address"
+        }
+      },
+      "manual_mac": {
+        "title": "Enter Bluetooth MAC Address",
+        "data": {
+          "mac": "Bluetooth MAC address (e.g. AA:BB:CC:DD:EE:FF)"
+        }
+      },
+      "auth_method": {
+        "title": "Authentication",
+        "description": "How do you want to provide the device auth key?",
+        "data": {
+          "auth_method": "Method"
+        }
+      },
+      "credentials": {
+        "title": "Pecron Account",
+        "data": {
+          "email": "Email",
+          "password": "Password",
+          "region": "Region"
+        }
+      },
+      "manual_key": {
+        "title": "Enter Auth Key",
+        "description": "Paste the base64 auth key from `pecron-monitor --setup` or the ha-pecron integration.",
+        "data": {
+          "auth_key": "Auth key (base64)"
+        }
+      },
+      "pick_cloud_device": {
+        "title": "Select Device",
+        "description": "Choose which device to configure.",
+        "data": {
+          "device_key": "Device"
+        }
+      },
+      "reconfigure": {
+        "title": "Update device model data",
+        "description": "Sign in to your Pecron account to download the data model for {title}. This maps the device's fields and setting labels for your model. The connection settings and auth key are kept.",
+        "data": {
+          "email": "Email",
+          "password": "Password",
+          "region": "Region"
+        }
+      },
+      "reconfigure_pick_device": {
+        "title": "Select Device",
+        "description": "Choose which device on your account this entry is.",
+        "data": {
+          "device_key": "Device"
+        }
+      }
+    },
+    "error": {
+      "login_failed": "Login failed — check email and password",
+      "invalid_auth_key": "Auth key must be valid base64",
+      "invalid_mac": "Invalid MAC address format (expected AA:BB:CC:DD:EE:FF)",
+      "no_devices_found": "No devices found on this account",
+      "cannot_connect": "Could not reach the Pecron cloud — try again"
+    },
+    "abort": {
+      "already_configured": "Device is already configured",
+      "auth_key_fetch_failed": "Could not fetch the device auth key from the cloud",
+      "reconfigure_successful": "Model data updated. The integration has been reloaded.",
+      "tsl_fetch_failed": "Could not download the device data model from the Pecron cloud"
+    }
+  }
+}
