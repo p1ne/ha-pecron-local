@@ -54,6 +54,8 @@ class TcpTransport(PecronTransport):
         self._packet_id = 0
         self._lock = asyncio.Lock()
         self._first_read_done = False
+        # Fields from the last read whose id isn't in the TSL map (diagnostics).
+        self.last_unmapped: list = []
 
     @property
     def connected(self) -> bool:
@@ -228,7 +230,12 @@ class TcpTransport(PecronTransport):
             )
 
         _LOGGER.debug("Collected %d fields from %s", len(all_fields), self.host)
-        return fields_to_kv(all_fields, controls=self.controls)
+        unmapped: list = []
+        kv = fields_to_kv(all_fields, controls=self.controls, unmapped=unmapped)
+        if unmapped != self.last_unmapped:
+            _LOGGER.debug("Unmapped fields from %s: %s", self.host, unmapped)
+        self.last_unmapped = unmapped
+        return kv
 
     async def _collect_data_packets(self) -> tuple[list, bool]:
         """Collect 0x0014 response packets after a read command has been sent.

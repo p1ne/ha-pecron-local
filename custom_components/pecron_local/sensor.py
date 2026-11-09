@@ -22,7 +22,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN, SENSOR_FIELDS, DEVICE_STATUS_LABELS, CHARGE_STATUS_LABELS
 from .coordinator import PecronCoordinator
-from .entity import PecronEntity
+from .entity import PecronEntity, async_remove_unreported, reported
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -98,7 +98,10 @@ class PecronSensor(PecronEntity, SensorEntity):
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     coordinator: PecronCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([
+    entities = [
         PecronSensor(coordinator, entry, desc)
         for desc in SENSOR_DESCRIPTIONS
-    ])
+        if reported(coordinator.data, SENSOR_FIELDS.get(desc.key, []))
+    ]
+    async_remove_unreported(hass, entry, "sensor", {e.unique_id for e in entities})
+    async_add_entities(entities)

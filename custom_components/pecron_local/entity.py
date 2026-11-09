@@ -4,7 +4,8 @@ from __future__ import annotations
 import time
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
@@ -71,3 +72,24 @@ class PecronControlEntity(PecronEntity):
             self._pending_value = None
         super()._handle_coordinator_update()
 
+
+def reported(data: dict | None, paths: list[tuple]) -> bool:
+    """True if the device reports any of these field paths."""
+    from .sensor import _get_field  # local import: sensor imports this module
+
+    return bool(data) and _get_field(data, paths) is not None
+
+
+@callback
+def async_remove_unreported(
+    hass: HomeAssistant, entry: ConfigEntry, domain: str, keep_unique_ids: set[str]
+) -> None:
+    """Drop this entry's entities on `domain` that the device doesn't report.
+
+    Models differ in which fields they send; without this, every model gets
+    every entity and the unsupported ones sit at "unknown" forever.
+    """
+    registry = er.async_get(hass)
+    for reg_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if reg_entry.domain == domain and reg_entry.unique_id not in keep_unique_ids:
+            registry.async_remove(reg_entry.entity_id)

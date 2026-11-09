@@ -193,10 +193,43 @@ def extract_iv_from_fields(fields: list[tuple]) -> str | None:
     return None
 
 
-def fields_to_kv(fields: list[tuple], controls: dict | None = None) -> dict:
+def _skip_struct(fields: list[tuple], start: int, count: int, out: list) -> int:
+    """Consume `count` struct members starting at `start` (recursing into nested
+    structs), appending them to `out`. Returns the index after the struct."""
+    j = start
+    consumed = 0
+    while j < len(fields) and consumed < count:
+        sid, stype, sval = fields[j]
+        if stype == "STRUCT":
+            nested: list = []
+            j = _skip_struct(fields, j + 1, sval, nested)
+            out.append((sid, "STRUCT", nested))
+        else:
+            out.append((sid, stype, _jsonable(sval)))
+            j += 1
+        consumed += 1
+    return j
+
+
+def _jsonable(val: object) -> object:
+    if isinstance(val, bytes):
+        try:
+            return val.decode("utf-8")
+        except UnicodeDecodeError:
+            return val.hex()
+    return val
+
+
+def fields_to_kv(
+    fields: list[tuple],
+    controls: dict | None = None,
+    unmapped: list | None = None,
+) -> dict:
     """Convert parsed TTLV fields to nested dict matching MQTT SENSOR_FIELDS paths.
 
-    Ported from local_transport._fields_to_kv in pecron-monitor.
+    Ported from local_transport._fields_to_kv in pecron-monitor. Top-level
+    fields with an unknown id are skipped (with their struct members, if any)
+    and, when `unmapped` is given, recorded there as (id, type, value).
     """
     kv: dict = {}
     id_to_code: dict[int, str] = {}
@@ -211,7 +244,17 @@ def fields_to_kv(fields: list[tuple], controls: dict | None = None) -> dict:
         fid, ftype, fval = fields[i]
         code = id_to_code.get(fid, TSL_TOP.get(fid))
         if code is None:
-            i += 1
+            if ftype == "STRUCT":
+                # Skip the whole struct; otherwise its members would be read as
+                # top-level ids and overwrite real values (e.g. battery %).
+                members: list = []
+                i = _skip_struct(fields, i + 1, fval, members)
+                if unmapped is not None:
+                    unmapped.append((fid, "STRUCT", members))
+            else:
+                if unmapped is not None:
+                    unmapped.append((fid, ftype, _jsonable(fval)))
+                i += 1
             continue
 
         if ftype == "STRUCT":

@@ -23,4 +23,7 @@ async def async_get_config_entry_diagnostics(
             else None
         ),
         "last_update_success": coordinator.last_update_success,
+        # Fields the device sent whose id isn't mapped to a name yet:
+        # [id, type, value] (structs list their members the same way).
+        "unmapped_fields": getattr(coordinator.active_transport, "last_unmapped", None),
     }

@@ -9,7 +9,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN, SENSOR_FIELDS
 from .coordinator import PecronCoordinator
-from .entity import PecronControlEntity
+from .entity import PecronControlEntity, async_remove_unreported, reported
 from .sensor import _get_field
 
 
@@ -64,7 +64,10 @@ class PecronSwitch(PecronControlEntity, SwitchEntity):
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     coordinator: PecronCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([
+    entities = [
         PecronSwitch(coordinator, entry, desc)
         for desc in SWITCH_DESCRIPTIONS
-    ])
+        if reported(coordinator.data, _SWITCH_FIELD_MAP.get(desc.key, [(desc.key,)]))
+    ]
+    async_remove_unreported(hass, entry, "switch", {e.unique_id for e in entities})
+    async_add_entities(entities)

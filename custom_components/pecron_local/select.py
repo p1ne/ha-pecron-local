@@ -17,7 +17,7 @@ from .const import (
     STANDBY_TIMEOUT_OPTIONS,
 )
 from .coordinator import PecronCoordinator
-from .entity import PecronControlEntity
+from .entity import PecronControlEntity, async_remove_unreported, reported
 from .sensor import _get_field
 
 
@@ -69,7 +69,10 @@ class PecronSelect(PecronControlEntity, SelectEntity):
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     coordinator: PecronCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([
+    entities = [
         PecronSelect(coordinator, entry, desc)
         for desc in SELECT_DESCRIPTIONS
-    ])
+        if reported(coordinator.data, [(desc.key,)])
+    ]
+    async_remove_unreported(hass, entry, "select", {e.unique_id for e in entities})
+    async_add_entities(entities)

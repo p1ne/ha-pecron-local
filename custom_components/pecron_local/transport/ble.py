@@ -54,6 +54,7 @@ class BleTransport(PecronTransport):
         self._encrypted = False
         self._packet_id = 0
         self._notify_queue: asyncio.Queue[bytes] = asyncio.Queue()
+        self.last_unmapped: list = []
 
     @property
     def connected(self) -> bool:
@@ -226,7 +227,10 @@ class BleTransport(PecronTransport):
             _LOGGER.debug("BLE: no parseable fields from %s", self.mac)
             return {}
 
-        return fields_to_kv(all_fields, controls=self.controls)
+        unmapped: list = []
+        kv = fields_to_kv(all_fields, controls=self.controls, unmapped=unmapped)
+        self.last_unmapped = unmapped
+        return kv
 
     async def write(self, data_point_id: int, value: object, ctrl_type: str) -> None:
         if not self.connected:
