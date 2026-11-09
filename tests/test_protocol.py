@@ -104,3 +104,20 @@ def test_parse_fields_bool_false():
     payload = struct.pack(">H", tag_word)
     fields = parse_fields(payload)
     assert fields[0] == (38, "BOOL", False)
+
+
+def test_unknown_struct_is_skipped_with_its_members():
+    from custom_components.pecron_local.protocol import fields_to_kv
+
+    fields = [
+        (1, "NUM", 87),
+        (200, "STRUCT", 2), (1, "NUM", 5), (2, "NUM", 7),
+        (2, "NUM", 6000),
+        (201, "NUM", 29),
+    ]
+    unmapped: list = []
+    kv = fields_to_kv(fields, unmapped=unmapped)
+
+    # Struct members must not be read as top-level ids 1/2.
+    assert kv == {"battery_percentage": 87, "remain_time": 6000}
+    assert unmapped == [(200, "STRUCT", [(1, "NUM", 5), (2, "NUM", 7)]), (201, "NUM", 29)]

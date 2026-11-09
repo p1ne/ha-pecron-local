@@ -28,8 +28,15 @@ def _coordinator(data: dict):
     coordinator.data = data
     coordinator.active_transport = MagicMock()
     coordinator.active_transport.write = AsyncMock()
+    coordinator.async_write = AsyncMock()
     coordinator.async_request_refresh = AsyncMock()
     return coordinator
+
+
+def _detached(entity):
+    # Not added to hass in these tests; state writes are no-ops.
+    entity.async_write_ha_state = MagicMock()
+    return entity
 
 
 def test_enum_labels_from_cloud_specs():
@@ -59,14 +66,14 @@ async def test_select_uses_cloud_enum_values_for_options_and_writes():
         }
     }
     coordinator = _coordinator({"ac_charging_power_ios": 4})
-    entity = PecronSelect(coordinator, _entry(controls), desc)
+    entity = _detached(PecronSelect(coordinator, _entry(controls), desc))
 
     assert entity.options == ["20%", "40%", "60%", "80%", "100%"]
     assert entity.current_option == "100%"
 
     await entity.async_select_option("100%")
 
-    coordinator.active_transport.write.assert_awaited_once_with(89, 4, "ENUM")
+    coordinator.async_write.assert_awaited_once_with(89, 4, "ENUM")
 
 
 def test_ac_charging_power_sensor_decodes_cloud_enum_to_percentage():

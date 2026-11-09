@@ -123,3 +123,32 @@ async def test_reuses_open_tcp_connection(coordinator, mock_tcp):
     data = await coordinator._async_update_data()
     mock_tcp.connect.assert_not_called()
     assert data["battery_percentage"] == 90
+
+
+async def test_write_reconnects_when_device_dropped_session(hass, mock_tcp, mock_ble):
+    from custom_components.pecron_local.transport.base import TransportError
+
+    coordinator = PecronCoordinator(hass, tcp=mock_tcp, ble=None)
+    mock_tcp.connected = True
+
+    async def _disconnect():
+        mock_tcp.connected = False
+
+    mock_tcp.disconnect = AsyncMock(side_effect=_disconnect)
+    mock_tcp.write = AsyncMock(side_effect=[TransportError("Connection closed"), None])
+
+    await coordinator.async_write(40, True, "BOOL")
+
+    assert mock_tcp.write.await_count == 2
+    mock_tcp.connect.assert_awaited()
+
+
+async def test_failed_write_raises_home_assistant_error(hass, mock_tcp):
+    from homeassistant.exceptions import HomeAssistantError
+    from custom_components.pecron_local.transport.base import TransportError
+
+    coordinator = PecronCoordinator(hass, tcp=mock_tcp, ble=None)
+    mock_tcp.write = AsyncMock(side_effect=TransportError("nope"))
+
+    with pytest.raises(HomeAssistantError):
+        await coordinator.async_write(40, True, "BOOL")
