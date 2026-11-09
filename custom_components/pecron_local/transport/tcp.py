@@ -150,27 +150,29 @@ class TcpTransport(PecronTransport):
             if len(buf) > 200:
                 raise TransportError("No sync found in stream")
 
-        # Read 2-byte length (handling 0xAA 0x55 byte-stuffing)
-        len_raw = b""
-        while len(len_raw) < 2:
-            b = await self._reader.read(1)
-            if not b:
-                raise TransportError("Connection closed")
-            buf += b
-            if len(buf) >= 2 and buf[-2] == 0xAA and b[0] == 0x55:
-                continue
-            len_raw += b
-
-        pkt_len = struct.unpack(">H", len_raw)[0]
-        remaining = pkt_len
-        while remaining > 0:
-            chunk = await self._reader.read(min(remaining, 4096))
+        # Everything after the sync word is byte-stuffed (0x55 inserted after
+        # any 0xAA followed by 0x55/0xAA). The length field counts UNSTUFFED
+        # bytes, so stuffing bytes must not count towards it, otherwise the
+        # frame is cut short and its ciphertext fails to decrypt.
+        raw = bytearray(buf)
+        unstuffed = bytearray()
+        prev: int | None = None
+        needed = 2  # length field first, then the rest of the frame
+        while len(unstuffed) < needed:
+            chunk = await self._reader.read(min(needed - len(unstuffed), 4096))
             if not chunk:
                 raise TransportError("Connection closed mid-packet")
-            buf += chunk
-            remaining -= len(chunk)
+            raw += chunk
+            for byte in chunk:
+                if prev == 0xAA and byte == 0x55:
+                    prev = None  # stuffing byte
+                    continue
+                unstuffed.append(byte)
+                prev = byte
+            if needed == 2 and len(unstuffed) >= 2:
+                needed = 2 + struct.unpack(">H", bytes(unstuffed[:2]))[0]
 
-        return buf
+        return bytes(raw)
 
     async def read(self) -> dict:
         if not self.connected:
@@ -201,23 +203,39 @@ class TcpTransport(PecronTransport):
             self._first_read_done = True
 
         await self._send_raw(build_read_packet(self._next_pid()))
-        all_fields = await self._collect_data_packets()
+        all_fields, peer_closed = await self._collect_data_packets()
 
-        if not all_fields:
+        if not all_fields and not peer_closed:
             # Device sometimes needs a moment to prepare data — retry once.
             _LOGGER.debug("No fields on first read from %s, retrying in 1s", self.host)
             await asyncio.sleep(1.0)
             await self._send_raw(build_read_packet(self._next_pid()))
-            all_fields = await self._collect_data_packets()
+            all_fields, peer_closed = await self._collect_data_packets()
+
+        if peer_closed:
+            # Pecron firmware closes the socket after each response. Keep
+            # whatever arrived and reconnect on the next poll.
+            await self.disconnect()
 
         if not all_fields:
-            _LOGGER.debug("No fields in TCP read from %s (even after retry)", self.host)
-            return {}
+            # Raise instead of returning {} so the coordinator reconnects and
+            # retries, rather than publishing an empty dict (every entity
+            # would show "unknown").
+            raise TransportError(
+                "Device closed the connection before sending data"
+                if peer_closed
+                else "No data fields in TCP read response (even after retry)"
+            )
 
+        _LOGGER.debug("Collected %d fields from %s", len(all_fields), self.host)
         return fields_to_kv(all_fields, controls=self.controls)
 
-    async def _collect_data_packets(self) -> list:
-        """Collect 0x0014 response packets after a read command has been sent."""
+    async def _collect_data_packets(self) -> tuple[list, bool]:
+        """Collect 0x0014 response packets after a read command has been sent.
+
+        Returns (fields, peer_closed). A connection closed by the device after
+        it has sent its data is normal and must not discard that data.
+        """
         all_fields: list = []
         for _ in range(10):
             try:
@@ -225,6 +243,9 @@ class TcpTransport(PecronTransport):
                 resp_raw = await asyncio.wait_for(self._recv_packet(), timeout=3.0)
             except asyncio.TimeoutError:
                 break
+            except (TransportError, ConnectionError, OSError) as exc:
+                _LOGGER.debug("TCP session to %s ended during read: %s", self.host, exc)
+                return all_fields, True
             resp = parse_packet(resp_raw)
             cmd = resp.get("cmd", 0)
             if cmd == 0x0012:
@@ -232,11 +253,18 @@ class TcpTransport(PecronTransport):
             if cmd == 0x0014:
                 payload = resp.get("payload", b"")
                 if payload:
-                    decrypted = aes_decrypt(self.auth_key, self._iv, payload)
-                    all_fields.extend(parse_fields(decrypted))
+                    try:
+                        decrypted = aes_decrypt(self.auth_key, self._iv, payload)
+                    except ValueError as exc:
+                        _LOGGER.debug("Could not decrypt packet from %s: %s", self.host, exc)
+                        continue
+                    fields = parse_fields(decrypted)
+                    _LOGGER.debug("Packet with %d fields from %s", len(fields), self.host)
+                    all_fields.extend(fields)
             else:
+                _LOGGER.debug("Unexpected cmd 0x%04x from %s", cmd, self.host)
                 break
-        return all_fields
+        return all_fields, False
 
     async def write(self, data_point_id: int, value: object, ctrl_type: str) -> None:
         if not self.connected:
