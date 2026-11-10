@@ -16,6 +16,7 @@ from bleak import BleakClient, BleakError
 
 from ..const import BLE_CHAR_UUID
 from ..protocol import (
+    build_write_payload,
     _byte_stuff,
     aes_decrypt,
     aes_encrypt,
@@ -235,11 +236,7 @@ class BleTransport(PecronTransport):
     async def write(self, data_point_id: int, value: object, ctrl_type: str) -> None:
         if not self.connected:
             raise TransportError("Not connected")
-        ctrl_type = ctrl_type.upper()
-        if ctrl_type == "BOOL":
-            raw_payload = struct.pack(">H", (data_point_id << 3) | (1 if value else 0))
-        else:
-            raw_payload = struct.pack(">H", (data_point_id << 3) | 2) + bytes([int(value)])
+        raw_payload = build_write_payload(data_point_id, value, ctrl_type)
 
         enc_payload = aes_encrypt(self.auth_key, self._iv, raw_payload)
         inner = struct.pack(">HH", self._next_pid(), 0x0013) + enc_payload

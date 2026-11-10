@@ -121,3 +121,27 @@ def test_unknown_struct_is_skipped_with_its_members():
     # Struct members must not be read as top-level ids 1/2.
     assert kv == {"battery_percentage": 87, "remain_time": 6000}
     assert unmapped == [(200, "STRUCT", [(1, "NUM", 5), (2, "NUM", 7)]), (201, "NUM", 29)]
+
+
+def test_enum_write_uses_device_num_encoding():
+    from custom_components.pecron_local.protocol import build_write_payload, parse_fields
+
+    # key_light_us (id 88) = 1: tag, then meta byte 0x00 (unsigned, 0 decimals,
+    # 1 byte), then the value — the same shape the device reports NUM fields in.
+    payload = build_write_payload(88, 1, "ENUM")
+    assert payload.hex() == "02c20001"
+    assert parse_fields(payload) == [(88, "NUM", 1)]
+
+
+def test_num_encoding_round_trips_through_parser():
+    from custom_components.pecron_local.protocol import build_write_payload, parse_fields
+
+    for value in (0, 4, 255, 256, 6000, -3):
+        assert parse_fields(build_write_payload(51, value, "ENUM")) == [(51, "NUM", value)]
+
+
+def test_bool_write_payload_unchanged():
+    from custom_components.pecron_local.protocol import build_write_payload
+
+    assert build_write_payload(40, True, "BOOL").hex() == "0141"
+    assert build_write_payload(40, False, "BOOL").hex() == "0140"

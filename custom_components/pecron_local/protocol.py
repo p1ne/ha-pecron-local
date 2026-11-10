@@ -97,10 +97,33 @@ def build_write_bool_packet(packet_id: int, data_point_id: int, value: bool) -> 
     return _build_packet(packet_id, 0x0013, payload)
 
 
+def encode_num_value(value: int) -> bytes:
+    """Encode an integer the way the device encodes NUM fields when reporting.
+
+    A meta byte (sign bit 7, decimal count bits 3-6, byte count - 1 in bits
+    0-2) precedes the big-endian value. Without it the device reads the value
+    byte as the meta byte and ignores the write.
+    """
+    value = int(value)
+    sign = 1 if value < 0 else 0
+    magnitude = abs(value)
+    byte_count = max(1, (magnitude.bit_length() + 7) // 8)
+    if byte_count > 8:
+        raise ValueError(f"value {value} too large for a NUM field")
+    meta = (sign << 7) | (byte_count - 1)
+    return bytes([meta]) + magnitude.to_bytes(byte_count, "big")
+
+
+def build_write_payload(data_point_id: int, value: object, ctrl_type: str) -> bytes:
+    """Unencrypted TTLV payload for a single data point write."""
+    if ctrl_type.upper() == "BOOL":
+        return struct.pack(">H", (data_point_id << 3) | (1 if value else 0))
+    return struct.pack(">H", (data_point_id << 3) | 2) + encode_num_value(int(value))
+
+
 def build_write_enum_packet(packet_id: int, data_point_id: int, value: int) -> bytes:
     """cmd=0x0013: write an enum/int data point (unencrypted)."""
-    tag = (data_point_id << 3) | 2
-    payload = struct.pack(">H", tag) + bytes([int(value)])
+    payload = build_write_payload(data_point_id, value, "ENUM")
     return _build_packet(packet_id, 0x0013, payload)
 
 

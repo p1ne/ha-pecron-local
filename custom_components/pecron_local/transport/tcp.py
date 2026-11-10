@@ -12,6 +12,7 @@ import logging
 import struct
 
 from ..protocol import (
+    build_write_payload,
     _byte_stuff,
     aes_decrypt,
     aes_encrypt,
@@ -294,11 +295,7 @@ class TcpTransport(PecronTransport):
         if not self._first_read_done:
             await asyncio.sleep(0.5)
             self._first_read_done = True
-        ctrl_type = ctrl_type.upper()
-        if ctrl_type == "BOOL":
-            raw_payload = struct.pack(">H", (data_point_id << 3) | (1 if value else 0))
-        else:
-            raw_payload = struct.pack(">H", (data_point_id << 3) | 2) + bytes([int(value)])
+        raw_payload = build_write_payload(data_point_id, value, ctrl_type)
 
         enc_payload = aes_encrypt(self.auth_key, self._iv, raw_payload)
         inner = struct.pack(">HH", self._next_pid(), 0x0013) + enc_payload
@@ -307,4 +304,17 @@ class TcpTransport(PecronTransport):
         raw_pkt = b"\xaa\xaa" + struct.pack(">H", length) + bytes([crc]) + inner
         pkt = _byte_stuff(raw_pkt)
         await self._send_raw(pkt)
-        await asyncio.wait_for(self._recv_packet(), timeout=self.timeout)
+        resp_raw = await asyncio.wait_for(self._recv_packet(), timeout=self.timeout)
+        if _LOGGER.isEnabledFor(logging.DEBUG):
+            resp = parse_packet(resp_raw)
+            detail = resp.get("payload", b"").hex()
+            if resp.get("cmd") == 0x0014 and resp.get("payload"):
+                try:
+                    detail = str(parse_fields(aes_decrypt(self.auth_key, self._iv, resp["payload"])))
+                except ValueError:
+                    pass
+            _LOGGER.debug(
+                "Write %d=%s (%s) sent %s; device replied cmd=0x%04x %s",
+                data_point_id, value, ctrl_type, raw_payload.hex(),
+                resp.get("cmd", 0), detail,
+            )
