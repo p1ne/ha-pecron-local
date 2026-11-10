@@ -165,8 +165,10 @@ SENSOR_FIELDS: dict[str, list[tuple]] = {
 # Remaining-time value the device sends when nothing is drawing power.
 REMAIN_TIME_NO_LOAD = 6000
 
+# Fallback when no TSL is stored; matches the p11wPr TSL labels.
+KEY_BRIGHTNESS_OPTIONS: list[str] = ["OFF", "10%", "50%", "100%"]
+
 # Labels as printed in the user manual / shown on the unit's screen.
-KEY_BRIGHTNESS_OPTIONS: list[str] = ["Off", "L1", "L2", "L3"]
 
 SCREEN_ENERGY_DISPLAY_OPTIONS: list[str] = [
     "Solar Input", "AC Input", "DC Output", "AC Output", "Battery Output",

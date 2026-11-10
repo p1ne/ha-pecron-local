@@ -49,19 +49,18 @@ async def test_p11wpr_selects_use_model_labels():
     assert set(ents) == {"ac_charging_power_ios", "device_standy_times_as", "key_light_us", "screen_power_statistics_mode_us"}
     assert ents["ac_charging_power_ios"]._data_point_id == 89
     assert ents["ac_charging_power_ios"].current_option == "100%"
-    # Manual labels replace the TSL's (OFF/10%/50%/100%) for the same values.
-    assert ents["key_light_us"]._attr_options == ["Off", "L1", "L2", "L3"]
-    assert ents["key_light_us"].current_option == "L3"
+    assert ents["key_light_us"]._attr_options == ["OFF", "10%", "50%", "100%"]
+    assert ents["key_light_us"].current_option == "100%"
+    assert ents["key_light_us"]._option_to_value["10%"] == 1
+    # Manual labels replace the TSL's for the statistics display.
     assert ents["screen_power_statistics_mode_us"].current_option == "Solar Input"
-    # Writes still send the device's numeric value.
-    assert ents["key_light_us"]._option_to_value["L1"] == 1
 
 
 def test_manual_labels_not_applied_to_a_different_enum():
     from custom_components.pecron_local.select import SELECT_DESCRIPTIONS, _labels_for_description
 
-    desc = next(d for d in SELECT_DESCRIPTIONS if d.key == "key_light_us")
-    other = {"key_light_us": {"enum_labels": {"0": "Low", "1": "High"}}}
+    desc = next(d for d in SELECT_DESCRIPTIONS if d.key == "screen_power_statistics_mode_us")
+    other = {"screen_power_statistics_mode_us": {"enum_labels": {"0": "Low", "1": "High"}}}
     assert _labels_for_description(desc, other) == {0: "Low", 1: "High"}
 
 
