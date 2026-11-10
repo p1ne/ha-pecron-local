@@ -80,6 +80,13 @@ def reported(data: dict | None, paths: list[tuple]) -> bool:
     return bool(data) and _get_field(data, paths) is not None
 
 
+def alarm_defined(entry: ConfigEntry) -> bool:
+    """True if the model's TSL defines the fault alarm field."""
+    from .const import CONF_CONTROLS  # noqa: PLC0415
+
+    return "FAULT_ALARM_ENUM" in (entry.data.get(CONF_CONTROLS) or {})
+
+
 @callback
 def async_remove_unreported(
     hass: HomeAssistant, entry: ConfigEntry, domain: str, keep_unique_ids: set[str]

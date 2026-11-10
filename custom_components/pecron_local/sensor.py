@@ -30,10 +30,12 @@ from .const import (
     DEVICE_STATUS_LABELS,
     CHARGE_STATUS_LABELS,
     REMAIN_TIME_NO_LOAD,
+    ALARM_CODES,
+    ALARM_NONE,
     enum_labels_for,
 )
 from .coordinator import PecronCoordinator
-from .entity import PecronEntity, async_remove_unreported, reported
+from .entity import PecronEntity, alarm_defined, async_remove_unreported, reported
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -72,6 +74,22 @@ def _device_status_label(raw: object, controls: dict | None = None) -> str:
 
 
 ACTIVITY_OPTIONS = ["Charging", "Discharging", "Idle"]
+
+
+def _alarm_code(raw: object) -> int | None:
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _alarm_label(raw: object) -> str | None:
+    code = _alarm_code(raw)
+    if code is None:
+        return None
+    if code == 0:
+        return ALARM_NONE
+    return f"E{code:02d} {ALARM_CODES[code]}" if code in ALARM_CODES else f"E{code:02d}"
 
 
 def _activity(kv: dict) -> str:
@@ -121,6 +139,7 @@ SENSOR_DESCRIPTIONS: list[PecronSensorDescription] = [
     PecronSensorDescription(key="remain_charging_time", name="Time to Full", native_unit_of_measurement=UnitOfTime.MINUTES, device_class=SensorDeviceClass.DURATION, state_class=SensorStateClass.MEASUREMENT),
     PecronSensorDescription(key="device_status_hm", name="Device Status", native_unit_of_measurement=None),
     PecronSensorDescription(key="activity", name="Activity", device_class=SensorDeviceClass.ENUM, options=ACTIVITY_OPTIONS),
+    PecronSensorDescription(key="alarm", name="Alarm"),
     PecronSensorDescription(key="charge_status", name="Charge Status", native_unit_of_measurement=None),
     PecronSensorDescription(key="ac_charging_power", name="AC Charging Power", native_unit_of_measurement=PERCENTAGE, state_class=SensorStateClass.MEASUREMENT),
     PecronSensorDescription(key="pv_energy_session", name="PV Energy (Session)", native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR, device_class=SensorDeviceClass.ENERGY, state_class=SensorStateClass.TOTAL_INCREASING, suggested_display_precision=2),
@@ -170,6 +189,10 @@ class PecronSensor(PecronEntity, SensorEntity):
             return _device_status_label(raw, self._controls)
         if key == "activity":
             return _activity(self.coordinator.data)
+        if key == "alarm":
+            # Absent while no alarm is active (the field is only in the
+            # model's TSL, not in normal polls).
+            return ALARM_NONE if raw is None else _alarm_label(raw)
         if key == "remain_time" and raw is not None:
             # No load: the device sends a placeholder, not a real estimate.
             if raw >= REMAIN_TIME_NO_LOAD or _power(self.coordinator.data, "total_output_power") <= 0:
@@ -189,12 +212,21 @@ class PecronSensor(PecronEntity, SensorEntity):
         return raw
 
 
+    @property
+    def extra_state_attributes(self) -> dict | None:
+        if self.entity_description.key != "alarm" or not self.coordinator.data:
+            return None
+        raw = _get_field(self.coordinator.data, SENSOR_FIELDS["alarm"])
+        return {"code": 0 if raw is None else _alarm_code(raw)}
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     coordinator: PecronCoordinator = hass.data[DOMAIN][entry.entry_id]
     entities = [
         PecronSensor(coordinator, entry, desc)
         for desc in SENSOR_DESCRIPTIONS
         if reported(coordinator.data, SENSOR_FIELDS.get(desc.key, []))
+        or (desc.key == "alarm" and alarm_defined(entry))
     ]
     async_remove_unreported(hass, entry, "sensor", {e.unique_id for e in entities})
     async_add_entities(entities)

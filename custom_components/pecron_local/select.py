@@ -32,6 +32,9 @@ class PecronSelectDescription(SelectEntityDescription):
     key: str
     data_point_id: int
     options: list[str]
+    # Labels from the user manual, used instead of the TSL's when both define
+    # exactly the same values (so a different model's enum is never relabelled).
+    display_labels: dict[int, str] | None = None
 
 
 SELECT_DESCRIPTIONS: list[PecronSelectDescription] = [
@@ -41,14 +44,22 @@ SELECT_DESCRIPTIONS: list[PecronSelectDescription] = [
     PecronSelectDescription(key="ac_output_voltage_io", name="AC Output Voltage", data_point_id=32, options=AC_VOLTAGE_OPTIONS),
     PecronSelectDescription(key="ac_output_frequency_io", name="AC Output Frequency", data_point_id=33, options=AC_FREQUENCY_OPTIONS),
     PecronSelectDescription(key="noastime_io", name="Auto-Off Time", data_point_id=34, options=AUTO_OFF_OPTIONS),
-    PecronSelectDescription(key="key_light_us", name="Key Brightness", data_point_id=88, options=KEY_BRIGHTNESS_OPTIONS),
-    PecronSelectDescription(key="screen_power_statistics_mode_us", name="Screen Energy Display", data_point_id=85, options=SCREEN_ENERGY_DISPLAY_OPTIONS),
+    PecronSelectDescription(key="key_light_us", name="Button Brightness", data_point_id=88, options=KEY_BRIGHTNESS_OPTIONS, display_labels=dict(enumerate(KEY_BRIGHTNESS_OPTIONS))),
+    PecronSelectDescription(key="screen_power_statistics_mode_us", name="Statistics Display", data_point_id=85, options=SCREEN_ENERGY_DISPLAY_OPTIONS, display_labels=dict(enumerate(SCREEN_ENERGY_DISPLAY_OPTIONS))),
 ]
 
 
 def _labels_for_description(description: PecronSelectDescription, controls: dict | None) -> dict:
     info = (controls or {}).get(description.key, {})
-    return enum_labels_for(description.key, info, description.options)
+    labels = enum_labels_for(description.key, info, description.options)
+    if description.display_labels:
+        try:
+            values = {int(v) for v in labels}
+        except (TypeError, ValueError):
+            values = set()
+        if values == set(description.display_labels):
+            return dict(description.display_labels)
+    return labels
 
 
 def _option_value_maps(labels: dict) -> tuple[dict[object, str], dict[str, object]]:

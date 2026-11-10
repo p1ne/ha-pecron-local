@@ -49,9 +49,20 @@ async def test_p11wpr_selects_use_model_labels():
     assert set(ents) == {"ac_charging_power_ios", "device_standy_times_as", "key_light_us", "screen_power_statistics_mode_us"}
     assert ents["ac_charging_power_ios"]._data_point_id == 89
     assert ents["ac_charging_power_ios"].current_option == "100%"
-    assert ents["key_light_us"]._attr_options == ["OFF", "10%", "50%", "100%"]
-    assert ents["key_light_us"].current_option == "100%"
-    assert ents["screen_power_statistics_mode_us"].current_option == "PV Input Energy"
+    # Manual labels replace the TSL's (OFF/10%/50%/100%) for the same values.
+    assert ents["key_light_us"]._attr_options == ["Off", "L1", "L2", "L3"]
+    assert ents["key_light_us"].current_option == "L3"
+    assert ents["screen_power_statistics_mode_us"].current_option == "Solar Input"
+    # Writes still send the device's numeric value.
+    assert ents["key_light_us"]._option_to_value["L1"] == 1
+
+
+def test_manual_labels_not_applied_to_a_different_enum():
+    from custom_components.pecron_local.select import SELECT_DESCRIPTIONS, _labels_for_description
+
+    desc = next(d for d in SELECT_DESCRIPTIONS if d.key == "key_light_us")
+    other = {"key_light_us": {"enum_labels": {"0": "Low", "1": "High"}}}
+    assert _labels_for_description(desc, other) == {0: "Low", 1: "High"}
 
 
 async def test_p11wpr_sensors():
@@ -93,7 +104,41 @@ async def test_time_to_empty_unknown_without_load():
     assert tte.native_value == 420
 
 
-async def test_power_pack_binary_sensor():
+async def test_power_pack_and_alarm_binary_sensors():
     ents, coordinator = await _entities(BS)
-    assert set(ents) == {"power_pack_attached"}
+    assert set(ents) == {"power_pack_attached", "alarm_active"}
     assert ents["power_pack_attached"].is_on is False
+    # p11wPr omits the alarm field from normal polls; its TSL defines it.
+    assert "FAULT_ALARM_ENUM" not in coordinator.data
+    assert ents["alarm_active"].is_on is False
+    coordinator.data["FAULT_ALARM_ENUM"] = 0
+    assert ents["alarm_active"].is_on is False
+    coordinator.data["FAULT_ALARM_ENUM"] = 21
+    assert ents["alarm_active"].is_on is True
+
+
+async def test_alarm_sensor_uses_manual_codes():
+    ents, coordinator = await _entities(SEN)
+    alarm = ents["alarm"]
+    assert alarm.native_value == "None"
+    assert alarm.extra_state_attributes == {"code": 0}
+    coordinator.data["FAULT_ALARM_ENUM"] = 0
+    assert alarm.native_value == "None"
+
+    coordinator.data["FAULT_ALARM_ENUM"] = 21
+    assert alarm.native_value == "E21 Inverter overtemperature"
+    coordinator.data["FAULT_ALARM_ENUM"] = 2
+    assert alarm.native_value == "E02 Battery pack undervoltage"
+    coordinator.data["FAULT_ALARM_ENUM"] = 99
+    assert alarm.native_value == "E99"
+    assert alarm.extra_state_attributes == {"code": 99}
+
+
+async def test_alarm_entities_not_created_without_tsl_or_field():
+    hass, entry, coordinator = _setup({"battery_percentage": 50, "total_input_power": 0})
+    entry.data = {}
+    added = []
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(BS, "async_remove_unreported", lambda *a, **k: None)
+        await BS.async_setup_entry(hass, entry, added.extend)
+    assert added == []

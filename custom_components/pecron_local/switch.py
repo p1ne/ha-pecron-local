@@ -33,11 +33,11 @@ SWITCH_DESCRIPTIONS: list[PecronSwitchDescription] = [
     ),
     PecronSwitchDescription(
         key="device_touch_locking_as",
-        name="Touch Lock",
+        name="Anti-Touch Mode",
         data_point_id=42,
         resource_codes=("device_touch_locking_as", "false_touch_us"),
     ),
-    PecronSwitchDescription(key="auto_light_flag_as", name="Auto Screen Light", data_point_id=43),
+    PecronSwitchDescription(key="auto_light_flag_as", name="Auto-Dim Screen", data_point_id=43),
     PecronSwitchDescription(key="beep_voice_us", name="Buzzer", data_point_id=87),
     PecronSwitchDescription(
         key="eco_quite_mode_as",

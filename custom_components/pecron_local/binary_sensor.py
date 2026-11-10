@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from homeassistant.components.binary_sensor import (
+    BinarySensorDeviceClass,
     BinarySensorEntity,
     BinarySensorEntityDescription,
 )
@@ -12,17 +13,28 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN, SENSOR_FIELDS
 from .coordinator import PecronCoordinator
-from .entity import PecronEntity, async_remove_unreported, reported
+from .entity import PecronEntity, alarm_defined, async_remove_unreported, reported
 from .sensor import _get_field
 
 
 @dataclass(frozen=True, kw_only=True)
 class PecronBinarySensorDescription(BinarySensorEntityDescription):
     key: str
+    # Value that means "off"; anything else is "on".
+    off_value: object = False
+    # Treat a missing field as "off" (alarm fields are only sent while active).
+    missing_is_off: bool = False
 
 
 BINARY_SENSOR_DESCRIPTIONS: list[PecronBinarySensorDescription] = [
     PecronBinarySensorDescription(key="power_pack_attached", name="Power Pack Attached"),
+    PecronBinarySensorDescription(
+        key="alarm_active",
+        name="Alarm Active",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        off_value=0,
+        missing_is_off=True,
+    ),
 ]
 
 
@@ -38,7 +50,14 @@ class PecronBinarySensor(PecronEntity, BinarySensorEntity):
         if not self.coordinator.data:
             return None
         val = _get_field(self.coordinator.data, SENSOR_FIELDS.get(self.entity_description.key, []))
-        return bool(val) if val is not None else None
+        if val is None:
+            return False if self.entity_description.missing_is_off else None
+        if self.entity_description.off_value is False:
+            return bool(val)
+        try:
+            return int(val) != int(self.entity_description.off_value)
+        except (TypeError, ValueError):
+            return None
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
@@ -47,6 +66,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         PecronBinarySensor(coordinator, entry, desc)
         for desc in BINARY_SENSOR_DESCRIPTIONS
         if reported(coordinator.data, SENSOR_FIELDS.get(desc.key, []))
+        or (desc.key == "alarm_active" and alarm_defined(entry))
     ]
     async_remove_unreported(hass, entry, "binary_sensor", {e.unique_id for e in entities})
     async_add_entities(entities)

@@ -156,6 +156,8 @@ SENSOR_FIELDS: dict[str, list[tuple]] = {
     "ac_output_energy_session": [("ac_output_energy",)],
     "ac_output_energy_total": [("total_ac_output_energy",)],
     "power_pack_attached": [("add_bat_status_hm",)],
+    "alarm": [("FAULT_ALARM_ENUM",)],
+    "alarm_active": [("FAULT_ALARM_ENUM",)],
     # Derived from power flow; gated on the device reporting input power.
     "activity": [("total_input_power",)],
 }
@@ -163,12 +165,49 @@ SENSOR_FIELDS: dict[str, list[tuple]] = {
 # Remaining-time value the device sends when nothing is drawing power.
 REMAIN_TIME_NO_LOAD = 6000
 
-KEY_BRIGHTNESS_OPTIONS: list[str] = ["Off", "10%", "50%", "100%"]
+# Labels as printed in the user manual / shown on the unit's screen.
+KEY_BRIGHTNESS_OPTIONS: list[str] = ["Off", "L1", "L2", "L3"]
 
 SCREEN_ENERGY_DISPLAY_OPTIONS: list[str] = [
-    "PV Input Energy", "Mains Input Energy", "DC Output Energy",
-    "AC Output Energy", "Battery Output Energy",
+    "Solar Input", "AC Input", "DC Output", "AC Output", "Battery Output",
 ]
+
+# Alarm codes as listed in the Pecron user manual (shown as e.g. "E02" on the
+# unit). The cloud TSL enum for FAULT_ALARM_ENUM uses a different numbering
+# and starts at 0 = "Battery Pack Low Temperature", while devices send 0 with
+# no alarm active, so the manual's codes are used. Not yet confirmed against a
+# live alarm.
+ALARM_CODES: dict[int, str] = {
+    2: "Battery pack undervoltage",
+    3: "Battery discharge overcurrent",
+    4: "Battery charge overcurrent",
+    5: "Battery short circuit",
+    6: "Battery disconnection",
+    7: "Battery low voltage, charging prohibited",
+    8: "Low charging temperature",
+    9: "High charging temperature",
+    10: "Low discharging temperature",
+    11: "High discharging temperature",
+    12: "Charging tube abnormal during discharging",
+    20: "Inverter overload",
+    21: "Inverter overtemperature",
+    22: "Busbar overvoltage/undervoltage",
+    35: "DC charging overtemperature",
+    40: "DC output short circuit/overload",
+    41: "DC output overvoltage",
+    42: "DC output overcurrent",
+    43: "DC output overtemperature",
+    51: "Expansion battery undervoltage",
+    52: "Expansion battery discharge overcurrent",
+    53: "Expansion battery charging overcurrent",
+    54: "Expansion battery short circuit",
+    55: "Expansion battery disconnection",
+    57: "Expansion battery low charging temperature",
+    58: "Expansion battery high charging temperature",
+    59: "Expansion battery low discharging temperature",
+    60: "Expansion battery high discharging temperature",
+}
+ALARM_NONE = "None"
 
 # Enum decode tables
 DEVICE_STATUS_LABELS: dict[int, str] = {
